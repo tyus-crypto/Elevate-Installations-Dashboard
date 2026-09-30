@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ops Hub — Sprint Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FBFAF7; --ink: #1B1D22; --ink-soft: #565A63; --line: #E4E1DA;
+    --pine: #2E6F5E; --pine-dim: #E7EFEC; --amber: #C97A2B; --amber-dim: #F7EADC;
+    --card: #FFFFFF; --sidebar: #14171C; --sidebar-text: #C9CCD3; --sidebar-text-dim: #7D818C;
+    --radius-sm: 6px; --radius-md: 10px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16181C; --ink: #EDEDEE; --ink-soft: #A3A7AF; --line: #2B2E34;
+      --pine: #6FBFA6; --pine-dim: #1D2925; --amber: #E0985A; --amber-dim: #2C2419;
+      --card: #1D2024; --sidebar: #0E1013; --sidebar-text: #C9CCD3; --sidebar-text-dim: #6C6F77;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #16181C; --ink: #EDEDEE; --ink-soft: #A3A7AF; --line: #2B2E34;
+    --pine: #6FBFA6; --pine-dim: #1D2925; --amber: #E0985A; --amber-dim: #2C2419;
+    --card: #1D2024; --sidebar: #0E1013; --sidebar-text: #C9CCD3; --sidebar-text-dim: #6C6F77;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
+  h1, h2, .brand { font-family: 'Fraunces', Georgia, serif; }
+
+  .shell { display: flex; min-height: 100%; }
+
+  .sidebar {
+    width: 240px; flex-shrink: 0; background: var(--sidebar); color: var(--sidebar-text);
+    padding: 28px 16px; padding-top: calc(28px + env(safe-area-inset-top, 0px));
+    display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; align-self: flex-start;
+    max-height: 100vh; overflow-y: auto;
+  }
+  .brand { color: #fff; font-size: 18px; font-weight: 500; padding: 0 6px; }
+  .brand span { color: var(--amber); }
+
+  .progress-wrap { padding: 0 6px; }
+  .progress-label { font-size: 12px; color: var(--sidebar-text-dim); margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .progress-track { height: 6px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--amber); width: 0%; transition: width 0.3s ease; }
+
+  nav.tabs { display: flex; flex-direction: column; gap: 2px; }
+  .tab-btn {
+    all: unset; cursor: pointer; padding: 10px 12px; border-radius: var(--radius-sm);
+    font-size: 13.5px; color: var(--sidebar-text); display: flex; align-items: center;
+    justify-content: space-between; gap: 8px; transition: background 0.15s ease;
+  }
+  .tab-btn:hover { background: rgba(255,255,255,0.06); }
+  .tab-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
+  .tab-btn .count { font-size: 11px; color: var(--sidebar-text-dim); }
+  .tab-btn.done .count::before { content: "✓ "; color: var(--pine); }
+
+  .reset-btn {
+    all: unset; cursor: pointer; font-size: 12px; color: var(--sidebar-text-dim);
+    padding: 8px 6px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
+  }
+  .reset-btn:hover { color: #fff; }
+
+  main { flex: 1; padding: 40px 48px 72px; padding-top: calc(40px + env(safe-area-inset-top, 0px)); max-width: 760px; }
+  .view { display: none; }
+  .view.active { display: block; animation: fade 0.25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+
+  .session-head { margin-bottom: 6px; }
+  .session-eyebrow { font-size: 12.5px; color: var(--amber); font-weight: 600; margin-bottom: 6px; }
+  .session-head h1 { font-size: 26px; font-weight: 500; margin: 0 0 8px; }
+  .session-meta { font-size: 13px; color: var(--ink-soft); margin: 0 0 24px; }
+  .session-goal {
+    background: var(--pine-dim); border-radius: var(--radius-md); padding: 14px 18px;
+    font-size: 14px; line-height: 1.6; margin-bottom: 26px; color: var(--ink);
+  }
+  .session-goal strong { color: var(--pine); }
+
+  .task-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+  .task {
+    display: flex; align-items: flex-start; gap: 12px; background: var(--card);
+    border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px;
+    cursor: pointer; transition: border-color 0.15s ease;
+  }
+  .task:hover { border-color: var(--pine); }
+  .task input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--pine); flex-shrink: 0; cursor: pointer; }
+  .task-text { font-size: 14.5px; line-height: 1.5; }
+  .task-text .sub { display: block; font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+  .task.checked .task-text { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--line); }
+
+  .nav-buttons { display: flex; justify-content: space-between; margin-top: 32px; border-top: 1px solid var(--line); padding-top: 20px; }
+  .nav-buttons button {
+    all: unset; cursor: pointer; font-size: 13.5px; padding: 9px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line); color: var(--ink);
+  }
+  .nav-buttons button:hover { border-color: var(--pine); color: var(--pine); }
+  .nav-buttons button.primary { background: var(--pine); color: #fff; border-color: var(--pine); }
+  .nav-buttons button:disabled { opacity: 0.4; pointer-events: none; }
+
+  @media (max-width: 760px) {
+    .shell { flex-direction: column; }
+    .sidebar { width: 100%; position: static; max-height: none; flex-direction: column; }
+    main { padding: 28px 20px 56px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">Sprint <span>Plan</span></div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Overall progress</span><span id="progress-pct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+    <button class="reset-btn" id="reset-btn">Reset all checkmarks</button>
+  </aside>
+
+  <main id="main"></main>
+</div>
+
+<script>
+const SESSIONS = [
+  {
+    id: "s1",
+    eyebrow: "Session 1 · ~45 min",
+    title: "Audit & decide what goes where",
+    meta: "No building yet — this session is just deciding, on paper, what belongs in the hub.",
+    goal: "By the end of this session: every link, tool, and login you use regularly is written down and sorted into a category (Sales, Email, Projects, Tools We Built, Admin-only).",
+    tasks: [
+      { text: "List every tool/bookmark you personally use to run the business", sub: "Don't filter yet — just get it all down." },
+      { text: "Sort each one into a category: Sales & Clients, Email, Projects & Tasks, Tools We Built, or Admin-only" },
+      { text: "Flag anything genuinely sensitive (financials, contracts, payroll) as Admin-only" },
+      { text: "Pick your business name / branding for the hub's header" }
+    ]
+  },
+  {
+    id: "s2",
+    eyebrow: "Session 2 · ~60 min",
+    title: "Customize the dashboard with real content",
+    meta: "Building session. Have last session's list open.",
+    goal: "By the end of this session: the Team Hub tab reflects your actual tools, categories, and business name — not placeholders.",
+    tasks: [
+      { text: "Replace \"Ops Hub\" branding with your real business name" },
+      { text: "Add/remove link tiles to match your Session 1 list" },
+      { text: "Rewrite each tile's one-line description in plain language a new employee would understand" },
+      { text: "Move anything flagged Admin-only into the Admin tab's section" },
+      { text: "Send the file to Claude to make these edits if you'd rather not hand-edit HTML" }
+    ]
+  },
+  {
+    id: "s3",
+    eyebrow: "Session 3 · ~45 min",
+    title: "Wire up the quote calculator",
+    meta: "Needs the calculator's .html file in hand (not just the local shortcut).",
+    goal: "By the end of this session: employees can open the quote calculator from the hub itself, not from a link that only works on your computer.",
+    tasks: [
+      { text: "Locate the quote_calculator html file on your computer" },
+      { text: "Upload it to Claude so it can be hosted inside the dashboard" },
+      { text: "Test opening it from the hub on your own machine" },
+      { text: "Test opening it from one employee's machine to confirm it's not tied to your computer" }
+    ]
+  },
+  {
+    id: "s4",
+    eyebrow: "Session 4 · ~30 min",
+    title: "Set up a real ClickUp client view",
+    meta: "Done inside ClickUp itself, not in the dashboard file.",
+    goal: "By the end of this session: at least one real client has a live, view-only ClickUp link — no manual status updates needed.",
+    tasks: [
+      { text: "Pick one active client project to start with" },
+      { text: "In ClickUp, create a filtered view showing just that client's relevant tasks" },
+      { text: "Turn that view into a Public View (view-only, no login required)" },
+      { text: "Swap that link into the dashboard's Client View tab, replacing the placeholder rows" },
+      { text: "Repeat for your other active clients once the first one feels right" }
+    ]
+  },
+  {
+    id: "s5",
+    eyebrow: "Session 5 · ~30 min",
+    title: "Decide who sees what (your access map)",
+    meta: "This is a decision session — write it down before touching any settings.",
+    goal: "By the end of this session: a simple written map of roles (You, Project Managers, Employees, Clients) and exactly what each one can see or touch.",
+    tasks: [
+      { text: "List your actual roles: Owner, Project Manager, Employee, Client" },
+      { text: "For each role, write down what they should see and what they shouldn't" },
+      { text: "Check this map against what's currently sitting behind the Admin passcode" },
+      { text: "Note anything that's more sensitive than a passcode should protect (flag for Session 6)" }
+    ]
+  },
+  {
+    id: "s6",
+    eyebrow: "Session 6 · ~45 min",
+    title: "Upgrade security for anything sensitive",
+    meta: "Only needed if Session 5 flagged something. Skip this session if it didn't.",
+    goal: "By the end of this session: anything genuinely sensitive is behind real authentication, not a client-side passcode.",
+    tasks: [
+      { text: "Decide where to host the dashboard long-term (Netlify, Cloudflare Pages, etc.)" },
+      { text: "Turn on that host's built-in password/access protection for the Admin section" },
+      { text: "Move anything truly sensitive (payroll, contracts) out of the dashboard entirely and into HubSpot/ClickUp's own permission system instead" },
+      { text: "Update the passcode in the file if you're keeping it as a light deterrent for non-sensitive items" }
+    ]
+  },
+  {
+    id: "s7",
+    eyebrow: "Session 7 · ~30 min",
+    title: "Test with real people",
+    meta: "Get one employee and one client to actually click around.",
+    goal: "By the end of this session: one employee and one client have used the hub and given you feedback.",
+    tasks: [
+      { text: "Share the link with one employee and ask them to find three things without help" },
+      { text: "Note anything they got stuck on or didn't understand" },
+      { text: "Share the Client View link with one client and ask if it's clear" },
+      { text: "Make a short list of fixes based on what you heard" }
+    ]
+  },
+  {
+    id: "s8",
+    eyebrow: "Session 8 · ~20 min",
+    title: "Roll out and set a review cadence",
+    meta: "The finish line for this sprint.",
+    goal: "By the end of this session: the hub is the official default, and you've scheduled a recurring check-in so it doesn't go stale.",
+    tasks: [
+      { text: "Apply the fixes from Session 7's feedback" },
+      { text: "Share the hub link with the full team as the new default starting point" },
+      { text: "Put a recurring 90-day reminder on your calendar to review who has access to what" },
+      { text: "Put a reminder to refresh client ClickUp views whenever a project wraps up" }
+    ]
+  }
+];
+
+const STORAGE_KEY = 'sprint-plan-progress-v1';
+let state = {};
+try {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  state = saved ? JSON.parse(saved) : {};
+} catch (e) { state = {}; }
+
+let activeSession = SESSIONS[0].id;
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function totalTasks() { return SESSIONS.reduce((sum, s) => sum + s.tasks.length, 0); }
+function checkedTasks() {
+  let n = 0;
+  SESSIONS.forEach(s => s.tasks.forEach((t, i) => { if (state[s.id + '-' + i]) n++; }));
+  return n;
+}
+function sessionChecked(s) { return s.tasks.every((t, i) => state[s.id + '-' + i]); }
+
+function renderSidebar() {
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = '';
+  SESSIONS.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (s.id === activeSession ? ' active' : '') + (sessionChecked(s) ? ' done' : '');
+    const doneCount = s.tasks.filter((t, i) => state[s.id + '-' + i]).length;
+    btn.innerHTML = '<span>' + s.title + '</span><span class="count">' + doneCount + '/' + s.tasks.length + '</span>';
+    btn.addEventListener('click', () => { activeSession = s.id; render(); });
+    tabsEl.appendChild(btn);
+  });
+
+  const pct = Math.round((checkedTasks() / totalTasks()) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+}
+
+function renderMain() {
+  const s = SESSIONS.find(x => x.id === activeSession);
+  const idx = SESSIONS.indexOf(s);
+  const main = document.getElementById('main');
+
+  let tasksHtml = s.tasks.map((t, i) => {
+    const key = s.id + '-' + i;
+    const checked = !!state[key];
+    return '<label class="task' + (checked ? ' checked' : '') + '" data-key="' + key + '">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + '>' +
+      '<span class="task-text">' + t.text + (t.sub ? '<span class="sub">' + t.sub + '</span>' : '') + '</span>' +
+      '</label>';
+  }).join('');
+
+  main.innerHTML =
+    '<div class="view active">' +
+      '<div class="session-head">' +
+        '<div class="session-eyebrow">' + s.eyebrow + '</div>' +
+        '<h1>' + s.title + '</h1>' +
+        '<p class="session-meta">' + s.meta + '</p>' +
+      '</div>' +
+      '<div class="session-goal"><strong>Session goal:</strong> ' + s.goal + '</div>' +
+      '<div class="task-list">' + tasksHtml + '</div>' +
+      '<div class="nav-buttons">' +
+        '<button id="prev-btn" ' + (idx === 0 ? 'disabled' : '') + '>&larr; Previous session</button>' +
+        '<button id="next-btn" class="primary" ' + (idx === SESSIONS.length - 1 ? 'disabled' : '') + '>Next session &rarr;</button>' +
+      '</div>' +
+    '</div>';
+
+  main.querySelectorAll('.task').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'INPUT') {
+        const box = el.querySelector('input');
+        box.checked = !box.checked;
+      }
+      const key = el.dataset.key;
+      state[key] = el.querySelector('input').checked;
+      save();
+      render();
+    });
+  });
+
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  if (prevBtn) prevBtn.addEventListener('click', () => { activeSession = SESSIONS[idx - 1].id; render(); });
+  if (nextBtn) nextBtn.addEventListener('click', () => { activeSession = SESSIONS[idx + 1].id; render(); });
+}
+
+function render() {
+  renderSidebar();
+  renderMain();
+}
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (confirm('Clear all checked items? This cannot be undone.')) {
+    state = {};
+    save();
+    render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

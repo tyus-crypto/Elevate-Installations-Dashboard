@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ops Hub — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FBFAF7; --ink: #1B1D22; --ink-soft: #565A63; --line: #E4E1DA;
+    --pine: #2E6F5E; --pine-dim: #E7EFEC; --amber: #C97A2B; --amber-dim: #F7EADC;
+    --card: #FFFFFF; --danger: #B4432F; --radius-sm: 6px; --radius-md: 10px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16181C; --ink: #EDEDEE; --ink-soft: #A3A7AF; --line: #2B2E34;
+      --pine: #6FBFA6; --pine-dim: #1D2925; --amber: #E0985A; --amber-dim: #2C2419;
+      --card: #1D2024;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #16181C; --ink: #EDEDEE; --ink-soft: #A3A7AF; --line: #2B2E34;
+    --pine: #6FBFA6; --pine-dim: #1D2925; --amber: #E0985A; --amber-dim: #2C2419;
+    --card: #1D2024;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
+  h1, h2 { font-family: 'Fraunces', Georgia, serif; }
+  a { color: var(--pine); }
+
+  main { max-width: 640px; margin: 0 auto; padding: 48px 24px 64px; padding-top: calc(48px + env(safe-area-inset-top, 0px)); }
+  .back-link { font-size: 13px; color: var(--ink-soft); text-decoration: none; display: inline-block; margin-bottom: 24px; }
+  .back-link:hover { color: var(--pine); }
+  h1 { font-size: 28px; font-weight: 500; margin: 0 0 8px; }
+  .lede { color: var(--ink-soft); font-size: 15px; margin: 0 0 24px; line-height: 1.6; }
+
+  .callout {
+    background: var(--amber-dim); border: 1px solid var(--amber); border-radius: var(--radius-md);
+    padding: 16px 18px; font-size: 13.5px; line-height: 1.6; color: var(--ink); margin-bottom: 24px;
+  }
+  .callout strong { color: var(--amber); }
+
+  .gate {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 28px;
+  }
+  .gate h2 { font-size: 18px; margin: 0 0 6px; font-weight: 500; }
+  .gate p { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 18px; line-height: 1.55; }
+  .gate input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    font-size: 14px; background: var(--paper); color: var(--ink); margin-bottom: 10px;
+  }
+  .gate button {
+    all: unset; cursor: pointer; background: var(--pine); color: #fff; padding: 10px 16px;
+    border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; display: inline-block;
+  }
+  .gate-error { color: var(--danger); font-size: 12.5px; margin-bottom: 10px; display: none; }
+
+  .admin-panel { display: none; }
+  .admin-panel.unlocked { display: block; }
+  .admin-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .lock-btn {
+    all: unset; cursor: pointer; font-size: 13px; color: var(--ink-soft);
+    border: 1px solid var(--line); padding: 6px 12px; border-radius: var(--radius-sm);
+  }
+  .lock-btn:hover { color: var(--ink); }
+
+  .category-title { font-size: 13px; font-weight: 600; color: var(--ink-soft); margin: 0 0 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .tile {
+    display: block; text-decoration: none; background: var(--card); border: 1px solid var(--line);
+    border-left: 3px solid var(--danger); border-radius: var(--radius-md); padding: 16px 18px;
+  }
+  .tile h3 { font-size: 15.5px; font-weight: 600; margin: 0 0 4px; color: var(--ink); }
+  .tile p { font-size: 13px; color: var(--ink-soft); margin: 0; line-height: 1.45; }
+  .tile .go { font-size: 12px; color: var(--ink-soft); margin-top: 10px; display: inline-block; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back-link" href="/">&larr; Back to Team Hub</a>
+  <h1>Admin</h1>
+  <p class="lede">A simple way to keep a few sensitive links out of the everyday team view.</p>
+
+  <div class="callout">
+    <strong>Worth knowing:</strong> this page now sits behind <code>middleware.js</code> at the edge, which is a
+    real access check &mdash; stronger than the old in-page passcode alone. It's still meant for keeping this
+    section tidy, not for anything as sensitive as payroll or contracts. For that, use ClickUp's and HubSpot's
+    own user permissions, which you already have.
+  </div>
+
+  <div class="gate" id="gate">
+    <h2>Enter admin passcode</h2>
+    <p>Default passcode is <strong>admin</strong> &mdash; change the <code>PASSCODE</code> variable below whenever you like.</p>
+    <div class="gate-error" id="gate-error">That passcode isn't right. Try again.</div>
+    <input type="password" id="gate-input" placeholder="Passcode" />
+    <br>
+    <button id="gate-submit">Unlock</button>
+  </div>
+
+  <div class="admin-panel" id="admin-panel">
+    <div class="admin-toolbar">
+      <span style="font-size:13px;color:var(--ink-soft)">Unlocked for this session</span>
+      <button class="lock-btn" id="lock-btn">Lock again</button>
+    </div>
+    <p class="category-title">Owner-only links</p>
+    <a class="tile" href="#" onclick="return false;">
+      <h3>Add your sensitive link here</h3>
+      <p>Payroll, contracts, financials &mdash; whatever you'd rather employees not stumble into.</p>
+      <span class="go">Placeholder &mdash; edit me</span>
+    </a>
+  </div>
+</main>
+
+<script>
+  (function () {
+    var PASSCODE = 'admin';
+    var gate = document.getElementById('gate');
+    var panel = document.getElementById('admin-panel');
+    var input = document.getElementById('gate-input');
+    var error = document.getElementById('gate-error');
+
+    function unlock() {
+      gate.style.display = 'none';
+      panel.classList.add('unlocked');
+      try { sessionStorage.setItem('ops-hub-admin', '1'); } catch (e) {}
+    }
+
+    document.getElementById('gate-submit').addEventListener('click', function () {
+      if (input.value === PASSCODE) {
+        error.style.display = 'none';
+        unlock();
+      } else {
+        error.style.display = 'block';
+      }
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') document.getElementById('gate-submit').click();
+    });
+    document.getElementById('lock-btn').addEventListener('click', function () {
+      panel.classList.remove('unlocked');
+      gate.style.display = 'block';
+      input.value = '';
+      try { sessionStorage.removeItem('ops-hub-admin'); } catch (e) {}
+    });
+
+    try {
+      if (sessionStorage.getItem('ops-hub-admin') === '1') unlock();
+    } catch (e) {}
+  })();
+</script>
+</body>
+</html>

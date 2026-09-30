@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ops Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FBFAF7;
+    --ink: #1B1D22;
+    --ink-soft: #565A63;
+    --line: #E4E1DA;
+    --pine: #2E6F5E;
+    --pine-dim: #E7EFEC;
+    --amber: #C97A2B;
+    --amber-dim: #F7EADC;
+    --card: #FFFFFF;
+    --sidebar: #14171C;
+    --sidebar-text: #C9CCD3;
+    --sidebar-text-dim: #7D818C;
+    --danger: #B4432F;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16181C;
+      --ink: #EDEDEE;
+      --ink-soft: #A3A7AF;
+      --line: #2B2E34;
+      --pine: #6FBFA6;
+      --pine-dim: #1D2925;
+      --amber: #E0985A;
+      --amber-dim: #2C2419;
+      --card: #1D2024;
+      --sidebar: #0E1013;
+      --sidebar-text: #C9CCD3;
+      --sidebar-text-dim: #6C6F77;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #16181C;
+    --ink: #EDEDEE;
+    --ink-soft: #A3A7AF;
+    --line: #2B2E34;
+    --pine: #6FBFA6;
+    --pine-dim: #1D2925;
+    --amber: #E0985A;
+    --amber-dim: #2C2419;
+    --card: #1D2024;
+    --sidebar: #0E1013;
+    --sidebar-text: #C9CCD3;
+    --sidebar-text-dim: #6C6F77;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    scroll-padding-top: env(safe-area-inset-top, 0px);
+  }
+  h1, h2, h3, .brand { font-family: 'Fraunces', Georgia, serif; }
+  * { box-sizing: border-box; }
+  a { color: inherit; }
+
+  .shell {
+    display: flex;
+    min-height: 100%;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--sidebar);
+    color: var(--sidebar-text);
+    padding: 28px 18px;
+    padding-top: calc(28px + env(safe-area-inset-top, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .brand {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    padding: 0 6px;
+  }
+  .brand span { color: var(--amber); }
+  nav.tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tab-btn {
+    all: unset;
+    cursor: pointer;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 14.5px;
+    color: var(--sidebar-text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s ease;
+  }
+  .tab-btn:hover { background: rgba(255,255,255,0.06); }
+  .tab-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
+  .tab-btn .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor; opacity: 0.5; flex-shrink: 0;
+  }
+  .tab-btn.active .dot { opacity: 1; background: var(--amber); }
+  .sidebar-foot {
+    margin-top: auto;
+    font-size: 12px;
+    color: var(--sidebar-text-dim);
+    padding: 0 6px;
+    line-height: 1.5;
+  }
+
+  /* Main */
+  main {
+    flex: 1;
+    padding: 40px 48px 64px;
+    padding-top: calc(40px + env(safe-area-inset-top, 0px));
+    max-width: 980px;
+  }
+  .view { display: none; }
+  .view.active { display: block; animation: fade 0.25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+
+  .view-head { margin-bottom: 32px; }
+  .view-head h1 { font-size: 30px; font-weight: 500; margin: 0 0 8px; }
+  .view-head p { color: var(--ink-soft); font-size: 15px; margin: 0; max-width: 60ch; line-height: 1.6; }
+
+  .category {
+    margin-bottom: 34px;
+  }
+  .category-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+  }
+  .tile {
+    display: block;
+    text-decoration: none;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent, var(--pine));
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tile:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+  .tile h3 { font-size: 15.5px; font-weight: 600; margin: 0 0 4px; font-family: 'Inter', sans-serif; }
+  .tile p { font-size: 13px; color: var(--ink-soft); margin: 0; line-height: 1.45; }
+  .tile .go { font-size: 12px; color: var(--pine); margin-top: 10px; display: inline-block; }
+  .tile.disabled { opacity: 0.55; cursor: default; pointer-events: none; }
+  .tile.disabled .go { color: var(--ink-soft); }
+
+  /* Client view */
+  .status-list { display: flex; flex-direction: column; gap: 10px; }
+  .status-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr auto;
+    gap: 16px;
+    align-items: center;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+  }
+  .status-row .name { font-weight: 600; font-size: 14.5px; }
+  .status-row .meta { font-size: 13px; color: var(--ink-soft); }
+  .badge {
+    justify-self: start;
+    font-size: 12.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .badge.on-track { background: var(--pine-dim); color: var(--pine); }
+  .badge.attention { background: var(--amber-dim); color: var(--amber); }
+  .badge.done { background: var(--pine-dim); color: var(--pine); }
+  .status-row .updated { font-size: 12.5px; color: var(--ink-soft); text-align: right; white-space: nowrap; }
+  .client-note {
+    margin-top: 28px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+    line-height: 1.6;
+  }
+
+  /* Admin gate */
+  .gate {
+    max-width: 380px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: 28px;
+  }
+  .gate h2 { font-size: 18px; margin: 0 0 6px; font-weight: 500; }
+  .gate p { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 18px; line-height: 1.55; }
+  .gate input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    background: var(--paper);
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .gate button {
+    all: unset;
+    cursor: pointer;
+    background: var(--pine);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    display: inline-block;
+  }
+  .gate-error { color: var(--danger); font-size: 12.5px; margin-bottom: 10px; display: none; }
+  .admin-panel { display: none; }
+  .admin-panel.unlocked { display: block; }
+  .admin-toolbar {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+  }
+  .lock-btn {
+    all: unset; cursor: pointer; font-size: 13px; color: var(--ink-soft);
+    border: 1px solid var(--line); padding: 6px 12px; border-radius: var(--radius-sm);
+  }
+  .lock-btn:hover { color: var(--ink); }
+  .callout {
+    background: var(--amber-dim);
+    border: 1px solid var(--amber);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink);
+    margin-bottom: 24px;
+  }
+  .callout strong { color: var(--amber); }
+
+  @media (max-width: 760px) {
+    .shell { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 16px; gap: 16px; overflow-x: auto; }
+    .brand { display: none; }
+    nav.tabs { flex-direction: row; }
+    .sidebar-foot { display: none; }
+    main { padding: 28px 20px 48px; }
+    .status-row { grid-template-columns: 1fr; gap: 6px; }
+    .status-row .updated { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">Ops <span>Hub</span></div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-view="team"><span class="dot"></span>Team Hub</button>
+      <button class="tab-btn" data-view="client"><span class="dot"></span>Client View</button>
+      <a class="tab-btn" href="/admin" style="text-decoration:none"><span class="dot"></span>Admin</a>
+    </nav>
+    <div class="sidebar-foot">Internal tool &middot; edit freely</div>
+  </aside>
+
+  <main>
+
+    <!-- TEAM HUB -->
+    <section class="view active" id="view-team">
+      <div class="view-head">
+        <h1>Everything you need, in one place</h1>
+        <p>The tools we use every day, grouped so you don't have to remember where anything lives.</p>
+      </div>
+
+      <div class="category">
+        <p class="category-title">Sales &amp; clients</p>
+        <div class="tile-grid">
+          <a class="tile" style="--accent:#2E6F5E" href="https://app-na2.hubspot.com/global-home/247353502" target="_blank" rel="noopener">
+            <h3>HubSpot</h3>
+            <p>Contacts, deals, and client communication history.</p>
+            <span class="go">Open HubSpot &rarr;</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="category">
+        <p class="category-title">Email</p>
+        <div class="tile-grid">
+          <a class="tile" style="--accent:#2E6F5E" href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener">
+            <h3>Gmail</h3>
+            <p>Shared inbox for client and vendor emails.</p>
+            <span class="go">Open Gmail &rarr;</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="category">
+        <p class="category-title">Projects &amp; tasks</p>
+        <div class="tile-grid">
+          <a class="tile" style="--accent:#2E6F5E" href="https://app.clickup.com/90141115477/v/c/6-901415314691-5" target="_blank" rel="noopener">
+            <h3>ClickUp</h3>
+            <p>Task boards and project timelines for active work.</p>
+            <span class="go">Open ClickUp &rarr;</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="category">
+        <p class="category-title">Tools we built</p>
+        <div class="tile-grid">
+          <a class="tile" style="--accent:#C97A2B" href="https://claude.ai/artifact/BhMAv7AitfBcr618CszHMK" target="_blank" rel="noopener">
+            <h3>Claude Workspace</h3>
+            <p>Custom internal tool built for the team.</p>
+            <span class="go">Open &rarr;</span>
+          </a>
+          <div class="tile disabled" style="--accent:#C97A2B">
+            <h3>Quote Calculator</h3>
+            <p>Not connected yet &mdash; send Claude the file and it'll be hosted here directly.</p>
+            <span class="go">Not yet available</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLIENT VIEW -->
+    <section class="view" id="view-client">
+      <div class="view-head">
+        <h1>Project status</h1>
+        <p>A plain-language look at where things stand. No login required &mdash; this is a status page, not your client's private data.</p>
+      </div>
+
+      <div class="status-list">
+        <div class="status-row">
+          <div>
+            <div class="name">Sample Project &mdash; Website Redesign</div>
+            <div class="meta">Milestone: Design review</div>
+          </div>
+          <span class="badge on-track">On track</span>
+          <div class="meta">Next: Client feedback due</div>
+          <div class="updated">Updated Sep 18</div>
+        </div>
+        <div class="status-row">
+          <div>
+            <div class="name">Sample Project &mdash; Q4 Campaign</div>
+            <div class="meta">Milestone: Asset production</div>
+          </div>
+          <span class="badge attention">Needs attention</span>
+          <div class="meta">Waiting on: Copy approval</div>
+          <div class="updated">Updated Sep 15</div>
+        </div>
+        <div class="status-row">
+          <div>
+            <div class="name">Sample Project &mdash; Onboarding Flow</div>
+            <div class="meta">Milestone: Final delivery</div>
+          </div>
+          <span class="badge done">Complete</span>
+          <div class="meta">Delivered</div>
+          <div class="updated">Updated Sep 10</div>
+        </div>
+      </div>
+
+      <p class="client-note">This list is edited by hand for now &mdash; it's placeholder content. Update the rows directly in this file (or ask Claude to update them) as project stages change. If you'd rather this pull live from ClickUp automatically, ClickUp's own guest-sharing feature can give each client a real-time view of just their task list without any of this custom code &mdash; worth considering once you have more than a couple of active clients.</p>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  (function () {
+    // Only wire up tabs that switch an in-page view (Team Hub, Client View).
+    // The Admin item is a real link to /admin now, so it's left alone.
+    var tabs = document.querySelectorAll('.tab-btn[data-view]');
+    var views = document.querySelectorAll('.view');
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        tabs.forEach(function (b) { b.classList.remove('active'); });
+        views.forEach(function (v) { v.classList.remove('active'); });
+        btn.classList.add('active');
+        document.getElementById('view-' + btn.dataset.view).classList.add('active');
+      });
+    });
+  })();
+</script>
+</body>
+</html>
