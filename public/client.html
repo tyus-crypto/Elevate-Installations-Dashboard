@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elevate Installations — Project Status</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand">
+      <img src="logo.png" alt="Elevate Installations">
+      <div class="brand-text">
+        <div class="brand-name">Elevate Installations</div>
+        <div class="brand-sub">Project status</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="app">
+  <p>Loading project…</p>
+</main>
+
+<script>
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function statusClass(status){
+  return {
+    'Pre-Project': 'status-pre', 'In Progress': 'status-progress',
+    'Quality Check': 'status-quality', 'Complete': 'status-complete',
+  }[status] || 'status-progress';
+}
+
+const slug = location.pathname.split('/c/')[1];
+const app = document.getElementById('app');
+let project = null;
+
+async function loadProject(){
+  const res = await fetch('/api/public/' + slug);
+  if (!res.ok) {
+    app.innerHTML = '<div class="empty-state">We couldn\'t find this project. Check the link your project manager sent you.</div>';
+    return;
+  }
+  project = await res.json();
+  render();
+}
+
+function render(){
+  app.innerHTML = `
+    <div class="hero">
+      <p class="hero-eyebrow">Elevate Your Spaces.</p>
+      <h1>${escapeHtml(project.name)}</h1>
+      <span class="status-pill ${statusClass(project.status)}">${escapeHtml(project.status)}</span>
+      <div class="progress-row">
+        <div class="progress-track"><div class="progress-fill" style="width:${project.pctComplete}%"></div></div>
+        <div class="progress-pct">${project.pctComplete}%</div>
+      </div>
+      <div class="hero-meta">
+        ${project.address ? `<span>Site: <b>${escapeHtml(project.address)}</b></span>` : ''}
+        ${project.pm ? `<span>Project manager: <b>${escapeHtml(project.pm)}</b></span>` : ''}
+        ${project.startDate ? `<span>Start: <b>${escapeHtml(project.startDate)}</b></span>` : ''}
+        ${project.targetDate ? `<span>Target completion: <b>${escapeHtml(project.targetDate)}</b></span>` : ''}
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div class="section">
+          <div class="section-head">
+            <div>
+              <h2>Checklist progress</h2>
+              <p class="hint">Updates as the crew completes each step on site.</p>
+            </div>
+          </div>
+          <div class="card" id="checklist-container"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section">
+          <div class="section-head"><h2>Install matrix</h2></div>
+          <div class="card" id="matrix-container"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <div>
+              <h2>Report a hold-up</h2>
+              <p class="hint">Something blocking access or causing a delay? Let us know.</p>
+            </div>
+          </div>
+          <div class="card">
+            <form id="issue-form">
+              <label>Your name<input type="text" name="reportedBy" placeholder="So we know who to follow up with" required></label>
+              <label>What's the issue?<input type="text" name="title" placeholder="Short summary" required></label>
+              <label>Details<textarea name="description" placeholder="What's happening, and where" required></textarea></label>
+              <button type="submit" class="btn-primary">Report hold-up</button>
+              <p class="form-msg" data-for="issue-form"></p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h2>Hold-up history</h2></div>
+      <div id="issues-container"></div>
+    </div>
+  `;
+
+  renderChecklist();
+  renderMatrix();
+  renderIssues();
+
+  document.getElementById('issue-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const msgEl = document.querySelector('.form-msg[data-for="issue-form"]');
+    try {
+      const res = await fetch(`/api/public/${slug}/issues`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Could not submit');
+      form.reset();
+      msgEl.textContent = 'Reported — your project manager has been notified.';
+      msgEl.className = 'form-msg success';
+      loadProject();
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.className = 'form-msg error';
+    }
+  });
+}
+
+function renderChecklist(){
+  const container = document.getElementById('checklist-container');
+  const categories = [...new Set(project.checklist.map(i => i.category))];
+  container.innerHTML = categories.map(cat => `
+    <div class="checklist-category">
+      <h3>${escapeHtml(cat)}</h3>
+      ${project.checklist.filter(i => i.category === cat).map(item => `
+        <div class="checklist-item ${item.done ? 'done' : ''}">
+          <div class="box readonly">${item.done ? '✓' : ''}</div>
+          <div>
+            <div class="checklist-item-text">${escapeHtml(item.text)}</div>
+            ${item.done && item.doneAt ? `<div class="checklist-item-meta">Completed ${new Date(item.doneAt).toLocaleString()}</div>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function renderMatrix(){
+  const el = document.getElementById('matrix-container');
+  if (project.matrix) {
+    el.innerHTML = `
+      <div class="matrix-box">
+        <div class="matrix-info">
+          <div class="file-name">📄 ${escapeHtml(project.matrix.originalName)}</div>
+          <div class="file-meta">Updated ${new Date(project.matrix.uploadedAt).toLocaleString()}</div>
+        </div>
+        <a class="btn-primary" href="/api/public/${slug}/matrix">Download</a>
+      </div>
+    `;
+  } else {
+    el.innerHTML = `<div class="matrix-empty">Your project manager hasn't uploaded the install matrix yet.</div>`;
+  }
+}
+
+function renderIssues(){
+  const container = document.getElementById('issues-container');
+  if (!project.issues.length) {
+    container.innerHTML = '<div class="empty-state">No hold-ups reported.</div>';
+    return;
+  }
+  container.innerHTML = project.issues.map(issue => `
+    <div class="issue">
+      <div class="issue-top">
+        <span class="issue-title">${escapeHtml(issue.title)}</span>
+        <span class="${issue.status === 'open' ? 'badge-open' : 'badge-resolved'}">${issue.status === 'open' ? 'Open' : 'Resolved'}</span>
+      </div>
+      <div class="issue-desc">${escapeHtml(issue.description)}</div>
+      <div class="issue-meta">Reported by ${escapeHtml(issue.reportedBy)} · ${new Date(issue.reportedAt).toLocaleString()}</div>
+      ${issue.status === 'resolved' && issue.resolutionNote ? `<div class="issue-resolution">Resolution: ${escapeHtml(issue.resolutionNote)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+loadProject();
+setInterval(loadProject, 20000); // light polling so progress feels real-time without a login
+</script>
+</body>
+</html>

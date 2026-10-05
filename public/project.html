@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elevate Installations — Project</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand">
+      <img src="logo.png" alt="Elevate Installations">
+      <div class="brand-text">
+        <div class="brand-name" id="project-name">Loading…</div>
+        <div class="brand-sub" id="project-sub"></div>
+      </div>
+    </div>
+    <div class="masthead-actions">
+      <select id="status-select" class="btn-ghost" style="padding:7px 10px;">
+        <option value="Pre-Project">Pre-Project</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Quality Check">Quality Check</option>
+        <option value="Complete">Complete</option>
+      </select>
+      <button id="delete-btn" class="btn-danger">Delete project</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="breadcrumb"><a href="/">← All projects</a></div>
+
+  <div class="card section">
+    <div class="section-head">
+      <div>
+        <h2>Customer link</h2>
+        <p class="hint">Send this to the customer — no login needed, shows live progress.</p>
+      </div>
+    </div>
+    <div class="share-row">
+      <input type="text" id="share-link" readonly>
+      <button class="btn-ghost" id="copy-link-btn">Copy link</button>
+      <a class="btn-ghost" id="open-link-btn" href="#" target="_blank">Open ↗</a>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <h2>Checklist</h2>
+            <p class="hint">Check items off as they're completed — customers see this update in real time.</p>
+          </div>
+        </div>
+        <div class="card" id="checklist-container"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">
+        <div class="section-head"><h2>Project details</h2></div>
+        <div class="card">
+          <label>Project name<input type="text" id="f-name"></label>
+          <label>Customer / property manager<input type="text" id="f-customerName"></label>
+          <label>Address<input type="text" id="f-address"></label>
+          <label>Project manager<input type="text" id="f-pm"></label>
+          <label>Foreman<input type="text" id="f-foreman"></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label>Start date<input type="date" id="f-startDate"></label>
+            <label>Target completion<input type="date" id="f-targetDate"></label>
+          </div>
+          <button class="btn-primary" id="save-details-btn">Save details</button>
+          <p class="form-msg" data-for="details"></p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>Install matrix</h2></div>
+        <div class="card">
+          <div id="matrix-current" class="matrix-box" style="margin-bottom:12px;"></div>
+          <form id="matrix-form">
+            <label>Replace with new file (.xlsx, .xls, .csv, .pdf)<input type="file" name="file" accept=".xlsx,.xls,.csv,.pdf" required></label>
+            <button type="submit" class="btn-primary">Upload</button>
+            <p class="form-msg" data-for="matrix-form"></p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div>
+        <h2>Reported hold-ups</h2>
+        <p class="hint">Anything the customer or crew flags shows up here.</p>
+      </div>
+    </div>
+    <div id="issues-container"></div>
+  </div>
+
+</main>
+
+<script src="app-pm.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const projectId = params.get('id');
+let project = null;
+
+async function loadProject(){
+  const res = await fetch('/api/projects/' + projectId);
+  if (res.status === 401) { location.href = '/'; return; }
+  if (!res.ok) { document.getElementById('project-name').textContent = 'Project not found'; return; }
+  project = await res.json();
+  render();
+}
+
+function render(){
+  document.getElementById('project-name').textContent = project.name;
+  document.getElementById('project-sub').textContent = project.customerName;
+  document.getElementById('status-select').value = project.status;
+
+  const shareUrl = location.origin + '/c/' + project.slug;
+  document.getElementById('share-link').value = shareUrl;
+  document.getElementById('open-link-btn').href = shareUrl;
+
+  ['name','customerName','address','pm','foreman','startDate','targetDate'].forEach(key => {
+    const el = document.getElementById('f-' + key);
+    if (el) el.value = project[key] || '';
+  });
+
+  renderChecklist();
+  renderMatrix();
+  renderIssues();
+}
+
+function renderChecklist(){
+  const container = document.getElementById('checklist-container');
+  const categories = [...new Set(project.checklist.map(i => i.category))];
+  container.innerHTML = categories.map(cat => `
+    <div class="checklist-category">
+      <h3>${escapeHtml(cat)}</h3>
+      ${project.checklist.filter(i => i.category === cat).map(item => `
+        <div class="checklist-item ${item.done ? 'done' : ''}">
+          <div class="box" data-id="${item.id}" data-action="toggle">${item.done ? '✓' : ''}</div>
+          <div>
+            <div class="checklist-item-text">${escapeHtml(item.text)}</div>
+            ${item.done && item.doneAt ? `<div class="checklist-item-meta">Completed ${new Date(item.doneAt).toLocaleString()}</div>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-action="toggle"]').forEach(box => {
+    box.addEventListener('click', async () => {
+      const item = project.checklist.find(i => i.id === box.dataset.id);
+      const res = await fetch(`/api/projects/${projectId}/checklist/${item.id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ done: !item.done }),
+      });
+      if (res.ok) { const updated = await res.json(); Object.assign(item, updated); renderChecklist(); }
+    });
+  });
+}
+
+function renderMatrix(){
+  const el = document.getElementById('matrix-current');
+  if (project.matrix) {
+    el.innerHTML = `
+      <div class="matrix-info">
+        <div class="file-name">📄 ${escapeHtml(project.matrix.originalName)}</div>
+        <div class="file-meta">Uploaded ${new Date(project.matrix.uploadedAt).toLocaleString()} by ${escapeHtml(project.matrix.uploadedBy)}</div>
+      </div>
+      <a class="btn-ghost" href="/c/${project.slug}" target="_blank">View customer page ↗</a>
+    `;
+  } else {
+    el.innerHTML = `<div class="matrix-empty">No install matrix uploaded yet.</div>`;
+  }
+}
+
+function renderIssues(){
+  const container = document.getElementById('issues-container');
+  if (!project.issues.length) {
+    container.innerHTML = '<div class="empty-state">No hold-ups reported.</div>';
+    return;
+  }
+  container.innerHTML = project.issues.map(issue => `
+    <div class="issue">
+      <div class="issue-top">
+        <span class="issue-title">${escapeHtml(issue.title)}</span>
+        <span class="${issue.status === 'open' ? 'badge-open' : 'badge-resolved'}">${issue.status === 'open' ? 'Open' : 'Resolved'}</span>
+      </div>
+      <div class="issue-desc">${escapeHtml(issue.description)}</div>
+      <div class="issue-meta">Reported by ${escapeHtml(issue.reportedBy)} · ${new Date(issue.reportedAt).toLocaleString()}</div>
+      ${issue.status === 'resolved' && issue.resolutionNote ? `<div class="issue-resolution">Resolution: ${escapeHtml(issue.resolutionNote)}</div>` : ''}
+      ${issue.status === 'open' ? `
+        <form data-issue="${issue.id}" class="resolve-form" style="margin-top:10px;">
+          <label>Resolution note<textarea name="resolutionNote" placeholder="What fixed it?" required></textarea></label>
+          <button type="submit" class="btn-primary">Mark resolved</button>
+        </form>
+      ` : ''}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.resolve-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const resolutionNote = new FormData(form).get('resolutionNote');
+      const res = await fetch(`/api/projects/${projectId}/issues/${form.dataset.issue}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ status: 'resolved', resolutionNote }),
+      });
+      if (res.ok) loadProject();
+    });
+  });
+}
+
+document.getElementById('copy-link-btn').addEventListener('click', () => {
+  const input = document.getElementById('share-link');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = document.getElementById('copy-link-btn');
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = original, 1500);
+  });
+});
+
+document.getElementById('status-select').addEventListener('change', async (e) => {
+  await fetch('/api/projects/' + projectId, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ status: e.target.value }),
+  });
+});
+
+document.getElementById('save-details-btn').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const data = {};
+  ['name','customerName','address','pm','foreman','startDate','targetDate'].forEach(key => {
+    data[key] = document.getElementById('f-' + key).value;
+  });
+  const res = await fetch('/api/projects/' + projectId, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data),
+  });
+  const msgEl = document.querySelector('.form-msg[data-for="details"]');
+  if (res.ok) {
+    msgEl.textContent = 'Saved.'; msgEl.className = 'form-msg success';
+    loadProject();
+  } else {
+    msgEl.textContent = 'Could not save.'; msgEl.className = 'form-msg error';
+  }
+});
+
+document.getElementById('matrix-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const msgEl = document.querySelector('.form-msg[data-for="matrix-form"]');
+  try {
+    const res = await fetch(`/api/projects/${projectId}/matrix`, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error((await res.json()).error || 'Upload failed');
+    e.target.reset();
+    msgEl.textContent = 'Uploaded.'; msgEl.className = 'form-msg success';
+    loadProject();
+  } catch (err) {
+    msgEl.textContent = err.message; msgEl.className = 'form-msg error';
+  }
+});
+
+document.getElementById('delete-btn').addEventListener('click', async () => {
+  if (!confirm('Delete this project? This cannot be undone.')) return;
+  await fetch('/api/projects/' + projectId, { method: 'DELETE' });
+  location.href = '/';
+});
+
+loadProject();
+</script>
+</body>
+</html>

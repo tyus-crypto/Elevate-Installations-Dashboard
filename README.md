@@ -1,92 +1,107 @@
-# Ops Hub
+# Elevate Installations — Client & PM Project Portal
 
-An internal dashboard that consolidates your team's links (HubSpot, Gmail,
-ClickUp, Claude tools) into one place, with a no-login client status view and
-a lightly-gated admin section.
+A real-time project status portal: project managers check off tasks and
+resolve hold-ups, customers get a live link to watch progress, report
+problems, and download the current install matrix — no login required on
+their end.
 
-## What's in this folder
+## Why it's built this way
 
-| File | Purpose |
-|---|---|
-| `index.html` | The site's entry point — required by Vercel so `/` doesn't 404. Identical to `hub.html`. |
-| `hub.html` | The dashboard itself — Team Hub and Client View tabs. Kept as a direct-link alias to `index.html`. |
-| `admin.html` | The Admin section, now a real page at `/admin` instead of a hidden tab, so `middleware.js` has an actual route to protect. |
-| `sprint-plan.html` | An interactive, checkbox-driven sprint plan for rolling this out in 8 sessions. Progress saves in your browser. |
-| `middleware.js` | Optional Vercel Edge Middleware that adds a basic-auth gate on `/admin`. See the reliability note inside the file before depending on it. |
-| `vercel.json` | Tells Vercel to use clean URLs, so `/admin` maps to `admin.html` without the `.html` extension — this is what makes the middleware matcher work. |
-| `README.md` | This file. |
+I looked at how platforms like Buildertrend and Procore handle this (both
+are standard in construction/install project management) before building
+this. The pattern that shows up everywhere: a simple customer-facing
+portal with live progress, a punch-list/hold-up log, document access, and
+daily-log-style updates — kept deliberately lighter-weight than the
+internal PM tooling, since customers don't need (or want) the full
+complexity.
 
-## Bug fix history
+The checklist itself is pulled directly from your **Project Manager
+Checklist** PDF — Pre-Project Readiness, Daily Crew & Safety, Daily
+Progress, and Quality Control are all in here as checkable items, grouped
+the same way your checklist groups them.
 
-The first version of this folder had no `index.html`, which is why Vercel
-returned "this page does not exist" at the root domain — there was nothing
-for it to serve at `/`. It also had the Admin section built as a JavaScript
-tab inside `hub.html` rather than a real page, which meant `middleware.js`'s
-`/admin` matcher had no route to actually intercept. Both are fixed as of
-this version: `index.html` exists, and Admin is its own page at `/admin`.
+## Two views
 
-## Before you go live
+**Project managers** (`/`) — sign in with a shared password, see every
+project, check off checklist items in real time, resolve reported
+hold-ups, upload/replace the install matrix, and grab each project's
+customer link.
 
-`hub.html` currently has placeholder content in a few spots:
+**Customers** (`/c/<project's unique link>`) — no login. They see:
+- Project status and overall progress, updated live
+- The full checklist, same as the PM sees it, read-only
+- A box to report a hold-up (with their name, a summary, and details) —
+  it shows up on the PM's dashboard immediately
+- The current install matrix, with a download button
 
-- The quote calculator tile is disabled — send Claude the real
-  `quote_calculator.html` file so it can be merged into this project and
-  linked properly (it currently only works as a local file on one computer).
-- The Client View tab has three sample project rows — replace the link with
-  a real ClickUp **Public View** link once you've set one up per client
-  (Session 4 in the sprint plan).
-- The Admin tab's passcode defaults to `admin` — change the `PASSCODE`
-  variable inside `hub.html`'s `<script>` section before sharing this with
-  anyone.
+The customer page refreshes itself every 20 seconds, so if a PM checks
+off a task while the customer has the page open, it shows up without
+them needing to reload.
 
-None of the admin gating in `hub.html` (the passcode) or `middleware.js`
-(basic auth) is meant for genuinely sensitive data — payroll, contracts, and
-similar belong in HubSpot's or ClickUp's own permission systems, not in this
-dashboard.
+## Running it on Replit
 
-## Deploying to Vercel
+1. Create a new Repl → **Import from a folder/zip**, and select this
+   project.
+2. Replit runs `npm install && npm start` automatically from `.replit`.
+   If it doesn't, open the Shell and run `npm install && npm start`.
+3. Open the webview URL — that's your PM dashboard.
 
-One-time setup:
+### Lock the PM dashboard with a password
 
-```bash
-npm install -g vercel
-vercel login
-vercel
+By default anyone with the link can reach the PM dashboard. To add a
+password:
+
+1. In Replit, open **Secrets** and add `DASHBOARD_PASSWORD` with your
+   team's password.
+2. Restart the Repl.
+
+The customer pages (`/c/...`) are never behind this password — they're
+meant to be sent straight to the customer. Each one uses a long random
+link instead of a login, the same way a lot of client portals handle
+this; only share a project's link with that project's customer.
+
+## What ships with it
+
+A demo project ("The Grayson Student Housing") is preloaded so you can
+see it working right away — some checklist items already checked, one
+resolved hold-up, so you can see what it looks like mid-project. Delete
+it from the PM dashboard whenever you're ready to add real ones.
+
+## Adding more projects
+
+From the PM dashboard: fill in the "New project" form at the bottom.
+Every new project automatically gets the full checklist loaded and a
+fresh customer link — nothing else to set up.
+
+## Project structure
+
+```
+server.js                     Express server: PM auth, project/checklist/issue/matrix API
+data/checklist-template.json  The standard checklist applied to every new project
+data/projects.json            Projects (created automatically on first run)
+data/checklist.json           Checklist items per project
+data/issues.json              Reported hold-ups per project
+data/matrix.json              Install matrix file metadata per project
+uploads/                      Where uploaded install matrix files are stored
+public/
+  index.html, app-pm.js       PM dashboard (project list + create)
+  project.html                PM project detail: checklist, hold-ups, matrix, share link
+  client.html                 Customer-facing project view
+  login.html                  PM password screen
+  styles.css                  Shared styling, matching elevateinstallations.com's
+                               navy/blue palette and your existing logo mark
+  logo.png                    Your logo, pulled from the quote calculator's favicon
 ```
 
-From then on, after making changes:
+## Notes / limits
 
-```bash
-git add .
-git commit -m "describe what changed"
-vercel --prod
-```
-
-If you want the free basic-auth gate on `/admin`, keep `middleware.js` in
-the project root — Vercel picks it up automatically. Update the
-`yourusername:yourpassword` placeholder inside it first.
-
-**After deploying, verify it actually works:** open `/admin` in an
-incognito/private window. You should get a browser login prompt, not the
-page itself. If the page loads without prompting, the middleware isn't
-firing — likely because this is a bare static project with no framework.
-The fix is usually adding a minimal `package.json`:
-
-```json
-{
-  "name": "ops-hub",
-  "version": "1.0.0"
-}
-```
-
-Redeploy after adding it and test `/admin` again. If it still doesn't
-prompt, fall back to Vercel's native Password Protection instead of relying
-on `middleware.js`: Project → Settings → Deployment Protection → Password
-Protection (Pro add-on or Enterprise).
-
-## Working through the rollout
-
-Open `sprint-plan.html` in a browser and go session by session. It's a
-regular HTML file — you can open it locally, or deploy it alongside
-`hub.html` if you'd like a shareable version for anyone else involved in
-setup.
+- Install matrix accepts `.xlsx`, `.xls`, `.csv`, or `.pdf` — uploading a
+  new one replaces the old one (the old file is removed).
+- Data is stored as plain JSON files, which is fine for this scale. If
+  you outgrow it — many simultaneous projects, needing an edit history,
+  etc. — swapping in a real database is a contained change, mostly
+  limited to the `readJSON`/`writeJSON` helpers in `server.js`.
+- Customer hold-up reports don't currently trigger an email/text to the
+  PM — they show up on the PM dashboard next time it's loaded or
+  refreshed. Wiring up a notification (email, Slack, SMS) would be a
+  good next addition if real-time alerting matters to you.

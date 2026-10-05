@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elevate Installations — Project Dashboard</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand">
+      <img src="logo.png" alt="Elevate Installations">
+      <div class="brand-text">
+        <div class="brand-name">Project Dashboard</div>
+        <div class="brand-sub">Internal — project managers</div>
+      </div>
+    </div>
+    <div class="masthead-actions">
+      <button id="logout-btn" class="btn-ghost" hidden>Log out</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="section-head">
+    <div>
+      <h2>Active projects</h2>
+      <p class="hint">Each project has its own live link you can send to the customer.</p>
+    </div>
+  </div>
+
+  <div id="empty-state" class="empty-state" hidden>No projects yet. Create one below.</div>
+  <div id="project-grid" class="project-grid"></div>
+
+  <section class="section" style="margin-top:30px;">
+    <div class="card" style="max-width:520px;">
+      <h2 style="font-size:14px;font-weight:600;margin:0 0 4px;">New project</h2>
+      <p class="hint" style="margin:0 0 14px;">Creates the project with the standard checklist already loaded.</p>
+      <form id="new-project-form">
+        <label>Project name<input type="text" name="name" placeholder="e.g. Northpoint Crossing" required></label>
+        <label>Customer / property manager<input type="text" name="customerName" placeholder="e.g. Northpoint Property Group" required></label>
+        <label>Address<input type="text" name="address" placeholder="City, State"></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Project manager<input type="text" name="pm" placeholder="PM name"></label>
+          <label>Foreman<input type="text" name="foreman" placeholder="Foreman name"></label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Start date<input type="date" name="startDate"></label>
+          <label>Target completion<input type="date" name="targetDate"></label>
+        </div>
+        <button type="submit" class="btn-primary">Create project</button>
+        <p class="form-msg" data-for="new-project-form"></p>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<script src="app-pm.js"></script>
+<script>
+(async function init(){
+  const session = await fetch('/api/session').then(r => r.json());
+  if (session.authRequired) {
+    const btn = document.getElementById('logout-btn');
+    btn.hidden = false;
+    btn.addEventListener('click', async () => { await fetch('/api/logout', {method:'POST'}); location.href = '/'; });
+  }
+  loadProjects();
+})();
+
+document.getElementById('new-project-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const msgEl = document.querySelector('.form-msg[data-for="new-project-form"]');
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Could not create project');
+    const project = await res.json();
+    location.href = '/project.html?id=' + project.id;
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = 'form-msg error';
+  }
+});
+</script>
+</body>
+</html>

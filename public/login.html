@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elevate Installations — Team Sign In</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login-card" id="login-form">
+      <img src="logo.png" alt="Elevate Installations">
+      <h1>Project Manager Sign In</h1>
+      <p>Enter the team password to manage projects.</p>
+      <input type="password" name="password" placeholder="Password" autofocus required>
+      <button type="submit" class="btn-primary">Enter</button>
+      <p class="form-msg" data-for="login-form"></p>
+    </form>
+  </div>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = e.target.password.value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        location.href = '/';
+      } else {
+        const el = document.querySelector('.form-msg');
+        el.textContent = 'Incorrect password.';
+        el.className = 'form-msg error';
+      }
+    });
+  </script>
+</body>
+</html>

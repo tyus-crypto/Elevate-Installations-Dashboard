@@ -1,0 +1,28 @@
+[
+  { "category": "Pre-Project Readiness", "text": "Scope and requirements confirmed" },
+  { "category": "Pre-Project Readiness", "text": "Job site confirmed ready for installation" },
+  { "category": "Pre-Project Readiness", "text": "Crew assigned and briefed" },
+  { "category": "Pre-Project Readiness", "text": "Equipment, tools, and materials staged" },
+  { "category": "Pre-Project Readiness", "text": "Travel and hotel arrangements confirmed" },
+  { "category": "Pre-Project Readiness", "text": "Project schedule confirmed" },
+  { "category": "Pre-Project Readiness", "text": "Approved room placement list (install matrix) obtained" },
+  { "category": "Pre-Project Readiness", "text": "Safety requirements reviewed with crew" },
+  { "category": "Pre-Project Readiness", "text": "Customer expectations confirmed" },
+
+  { "category": "Daily Crew & Safety", "text": "Daily crew check-in completed" },
+  { "category": "Daily Crew & Safety", "text": "Crew attendance and assignments confirmed" },
+  { "category": "Daily Crew & Safety", "text": "Tools, equipment, and materials verified safe" },
+  { "category": "Daily Crew & Safety", "text": "Worksite kept clean and organized" },
+  { "category": "Daily Crew & Safety", "text": "Safety procedures followed" },
+
+  { "category": "Daily Progress", "text": "Progress reviewed against schedule" },
+  { "category": "Daily Progress", "text": "Completed work matches installation requirements" },
+  { "category": "Daily Progress", "text": "Materials stored and handled properly" },
+  { "category": "Daily Progress", "text": "Schedule updates communicated to customer" },
+
+  { "category": "Quality Control", "text": "Routine quality inspection completed" },
+  { "category": "Quality Control", "text": "Installation matches approved specifications" },
+  { "category": "Quality Control", "text": "Defective or incomplete work corrected" },
+  { "category": "Quality Control", "text": "Property manager sign-off obtained for any changes" },
+  { "category": "Quality Control", "text": "Project records and photos updated" }
+]
