@@ -6,6 +6,7 @@
 <title>Elevate Installations — Project Status</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="styles.css">
+<script src="http.js"></script>
 </head>
 <body>
 
@@ -41,12 +42,15 @@ const app = document.getElementById('app');
 let project = null;
 
 async function loadProject(){
-  const res = await fetch('/api/public/' + slug);
-  if (!res.ok) {
-    app.innerHTML = '<div class="empty-state">We couldn\'t find this project. Check the link your project manager sent you.</div>';
+  try {
+    project = await apiFetch('/api/public/' + slug);
+  } catch (err) {
+    const message = err.status === 404
+      ? "We couldn't find this project. Check the link your project manager sent you."
+      : err.message;
+    app.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     return;
   }
-  project = await res.json();
   render();
 }
 
@@ -123,12 +127,7 @@ function render(){
     const data = Object.fromEntries(new FormData(form).entries());
     const msgEl = document.querySelector('.form-msg[data-for="issue-form"]');
     try {
-      const res = await fetch(`/api/public/${slug}/issues`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Could not submit');
+      await apiFetchJSON(`/api/public/${slug}/issues`, 'POST', data);
       form.reset();
       msgEl.textContent = 'Reported — your project manager has been notified.';
       msgEl.className = 'form-msg success';

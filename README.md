@@ -1,5 +1,27 @@
 # Elevate Installations — Client & PM Project Portal
 
+### Fixed: "Unexpected token 'T'... is not valid JSON"
+That error happened because a few places in the frontend assumed every
+server response would be JSON and tried to parse it as such. If the
+server (or the hosting platform) ever answered with something else — an
+HTML error page, a platform-level 404 — the page would crash with that
+raw parser error instead of a readable message. This showed up most
+reliably on the "New project" form, which is why it appeared right when
+entering job details.
+
+All five places doing this (new project, checklist toggling, resolving a
+hold-up, uploading the install matrix, and the customer's hold-up form)
+now go through one shared, defensive fetch helper (`public/http.js`) that
+always surfaces a plain-language error instead. The server was also
+hardened to always answer API requests in JSON — including unmatched
+routes and unexpected server errors — and to bind explicitly to
+`0.0.0.0`, which Replit's webview needs to reach it reliably. I ran the
+full flow (create project, toggle checklist, upload/download the install
+matrix, report and resolve a hold-up, password login) against the actual
+server code to confirm all of this works end-to-end, not just by reading
+the code.
+
+
 A real-time project status portal: project managers check off tasks and
 resolve hold-ups, customers get a live link to watch progress, report
 problems, and download the current install matrix — no login required on

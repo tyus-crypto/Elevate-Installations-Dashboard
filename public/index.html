@@ -60,14 +60,23 @@
 
 </main>
 
+<script src="http.js"></script>
 <script src="app-pm.js"></script>
 <script>
 (async function init(){
-  const session = await fetch('/api/session').then(r => r.json());
-  if (session.authRequired) {
-    const btn = document.getElementById('logout-btn');
-    btn.hidden = false;
-    btn.addEventListener('click', async () => { await fetch('/api/logout', {method:'POST'}); location.href = '/'; });
+  try {
+    const session = await apiFetch('/api/session');
+    if (session.authRequired) {
+      const btn = document.getElementById('logout-btn');
+      btn.hidden = false;
+      btn.addEventListener('click', async () => {
+        try { await apiFetch('/api/logout', { method: 'POST' }); } catch {}
+        location.href = '/';
+      });
+    }
+  } catch (err) {
+    // Non-fatal: if this fails we just won't show the logout button.
+    console.error('Could not check session:', err.message);
   }
   loadProjects();
 })();
@@ -77,14 +86,9 @@ document.getElementById('new-project-form').addEventListener('submit', async (e)
   const form = e.target;
   const data = Object.fromEntries(new FormData(form).entries());
   const msgEl = document.querySelector('.form-msg[data-for="new-project-form"]');
+  msgEl.textContent = ''; msgEl.className = 'form-msg';
   try {
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error((await res.json()).error || 'Could not create project');
-    const project = await res.json();
+    const project = await apiFetchJSON('/api/projects', 'POST', data);
     location.href = '/project.html?id=' + project.id;
   } catch (err) {
     msgEl.textContent = err.message;

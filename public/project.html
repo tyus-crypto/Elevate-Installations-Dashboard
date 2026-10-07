@@ -104,6 +104,7 @@
 
 </main>
 
+<script src="http.js"></script>
 <script src="app-pm.js"></script>
 <script>
 const params = new URLSearchParams(location.search);
@@ -111,10 +112,14 @@ const projectId = params.get('id');
 let project = null;
 
 async function loadProject(){
-  const res = await fetch('/api/projects/' + projectId);
-  if (res.status === 401) { location.href = '/'; return; }
-  if (!res.ok) { document.getElementById('project-name').textContent = 'Project not found'; return; }
-  project = await res.json();
+  try {
+    project = await apiFetch('/api/projects/' + projectId);
+  } catch (err) {
+    if (err.status === 401) { location.href = '/'; return; }
+    document.getElementById('project-name').textContent = 'Could not load this project';
+    document.getElementById('project-sub').textContent = err.message;
+    return;
+  }
   render();
 }
 
@@ -158,12 +163,13 @@ function renderChecklist(){
   container.querySelectorAll('[data-action="toggle"]').forEach(box => {
     box.addEventListener('click', async () => {
       const item = project.checklist.find(i => i.id === box.dataset.id);
-      const res = await fetch(`/api/projects/${projectId}/checklist/${item.id}`, {
-        method: 'PATCH',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ done: !item.done }),
-      });
-      if (res.ok) { const updated = await res.json(); Object.assign(item, updated); renderChecklist(); }
+      try {
+        const updated = await apiFetchJSON(`/api/projects/${projectId}/checklist/${item.id}`, 'PATCH', { done: !item.done });
+        Object.assign(item, updated);
+        renderChecklist();
+      } catch (err) {
+        alert('Could not update that item: ' + err.message);
+      }
     });
   });
 }
@@ -211,12 +217,12 @@ function renderIssues(){
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const resolutionNote = new FormData(form).get('resolutionNote');
-      const res = await fetch(`/api/projects/${projectId}/issues/${form.dataset.issue}`, {
-        method: 'PATCH',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ status: 'resolved', resolutionNote }),
-      });
-      if (res.ok) loadProject();
+      try {
+        await apiFetchJSON(`/api/projects/${projectId}/issues/${form.dataset.issue}`, 'PATCH', { status: 'resolved', resolutionNote });
+        loadProject();
+      } catch (err) {
+        alert('Could not mark this resolved: ' + err.message);
+      }
     });
   });
 }
@@ -233,11 +239,11 @@ document.getElementById('copy-link-btn').addEventListener('click', () => {
 });
 
 document.getElementById('status-select').addEventListener('change', async (e) => {
-  await fetch('/api/projects/' + projectId, {
-    method: 'PATCH',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ status: e.target.value }),
-  });
+  try {
+    await apiFetchJSON('/api/projects/' + projectId, 'PATCH', { status: e.target.value });
+  } catch (err) {
+    alert('Could not update status: ' + err.message);
+  }
 });
 
 document.getElementById('save-details-btn').addEventListener('click', async (e) => {
@@ -246,17 +252,13 @@ document.getElementById('save-details-btn').addEventListener('click', async (e) 
   ['name','customerName','address','pm','foreman','startDate','targetDate'].forEach(key => {
     data[key] = document.getElementById('f-' + key).value;
   });
-  const res = await fetch('/api/projects/' + projectId, {
-    method: 'PATCH',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(data),
-  });
   const msgEl = document.querySelector('.form-msg[data-for="details"]');
-  if (res.ok) {
+  try {
+    await apiFetchJSON('/api/projects/' + projectId, 'PATCH', data);
     msgEl.textContent = 'Saved.'; msgEl.className = 'form-msg success';
     loadProject();
-  } else {
-    msgEl.textContent = 'Could not save.'; msgEl.className = 'form-msg error';
+  } catch (err) {
+    msgEl.textContent = err.message; msgEl.className = 'form-msg error';
   }
 });
 
@@ -265,8 +267,7 @@ document.getElementById('matrix-form').addEventListener('submit', async (e) => {
   const formData = new FormData(e.target);
   const msgEl = document.querySelector('.form-msg[data-for="matrix-form"]');
   try {
-    const res = await fetch(`/api/projects/${projectId}/matrix`, { method: 'POST', body: formData });
-    if (!res.ok) throw new Error((await res.json()).error || 'Upload failed');
+    await apiFetch(`/api/projects/${projectId}/matrix`, { method: 'POST', body: formData });
     e.target.reset();
     msgEl.textContent = 'Uploaded.'; msgEl.className = 'form-msg success';
     loadProject();
@@ -277,8 +278,12 @@ document.getElementById('matrix-form').addEventListener('submit', async (e) => {
 
 document.getElementById('delete-btn').addEventListener('click', async () => {
   if (!confirm('Delete this project? This cannot be undone.')) return;
-  await fetch('/api/projects/' + projectId, { method: 'DELETE' });
-  location.href = '/';
+  try {
+    await apiFetch('/api/projects/' + projectId, { method: 'DELETE' });
+    location.href = '/';
+  } catch (err) {
+    alert('Could not delete this project: ' + err.message);
+  }
 });
 
 loadProject();

@@ -359,6 +359,14 @@ app.get('/api/public/:slug/matrix', (req, res) => {
   res.download(path.join(UPLOAD_DIR, m.storedName), m.originalName);
 });
 
+// Any /api/* request that didn't match a route above is almost certainly a
+// bug or a stale client — answer it in JSON rather than letting it fall
+// through to a plain-text/HTML 404, so the frontend never has to guess
+// what kind of response it got back.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `No API route for ${req.method} ${req.originalUrl}` });
+});
+
 // =======================================================================
 // Page routes
 // =======================================================================
@@ -370,7 +378,20 @@ app.get('/', (req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.listen(PORT, () => {
+// Last-resort error handler. Without this, an unexpected throw anywhere
+// above results in Express's default HTML error page, which breaks any
+// frontend code expecting JSON back from an /api/ call.
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (req.path.startsWith('/api/')) {
+    return res.status(500).json({ error: 'Something went wrong on the server. Please try again.' });
+  }
+  res.status(500).send('Something went wrong on the server.');
+});
+
+// Replit (and most hosts) need the server bound to 0.0.0.0, not just
+// localhost, or the webview/proxy can't reach it.
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Elevate client portal running on port ${PORT}`);
   if (!PASSWORD) console.log('No DASHBOARD_PASSWORD set — the PM dashboard is open to anyone with the link.');
 });

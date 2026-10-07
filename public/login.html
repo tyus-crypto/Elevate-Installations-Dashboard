@@ -6,6 +6,7 @@
 <title>Elevate Installations — Team Sign In</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="styles.css">
+<script src="http.js"></script>
 </head>
 <body>
   <div class="login-wrap">
@@ -22,16 +23,12 @@
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const password = e.target.password.value;
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ password }),
-      });
-      if (res.ok) {
+      const el = document.querySelector('.form-msg');
+      try {
+        await apiFetchJSON('/api/login', 'POST', { password });
         location.href = '/';
-      } else {
-        const el = document.querySelector('.form-msg');
-        el.textContent = 'Incorrect password.';
+      } catch (err) {
+        el.textContent = err.message;
         el.className = 'form-msg error';
       }
     });

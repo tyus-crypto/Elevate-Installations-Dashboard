@@ -18,11 +18,10 @@ async function loadProjects(){
 
   let projects;
   try {
-    const res = await fetch('/api/projects');
-    if (res.status === 401) { location.href = '/'; return; }
-    projects = await res.json();
-  } catch {
-    grid.innerHTML = '<p class="form-msg error">Could not load projects.</p>';
+    projects = await apiFetch('/api/projects');
+  } catch (err) {
+    if (err.status === 401) { location.href = '/'; return; }
+    grid.innerHTML = `<p class="form-msg error">${escapeHtml(err.message)}</p>`;
     return;
   }
 
