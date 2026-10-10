@@ -1,129 +1,94 @@
-# Elevate Installations — Client & PM Project Portal
+# Elevate Installations — Client & PM Project Portal (Vercel edition)
 
-### Fixed: "Unexpected token 'T'... is not valid JSON"
-That error happened because a few places in the frontend assumed every
-server response would be JSON and tried to parse it as such. If the
-server (or the hosting platform) ever answered with something else — an
-HTML error page, a platform-level 404 — the page would crash with that
-raw parser error instead of a readable message. This showed up most
-reliably on the "New project" form, which is why it appeared right when
-entering job details.
+Project managers check off tasks, resolve hold-ups, and upload the install
+matrix. Customers get a private live link to watch progress, report a
+hold-up, and download the current matrix. No customer login.
 
-All five places doing this (new project, checklist toggling, resolving a
-hold-up, uploading the install matrix, and the customer's hold-up form)
-now go through one shared, defensive fetch helper (`public/http.js`) that
-always surfaces a plain-language error instead. The server was also
-hardened to always answer API requests in JSON — including unmatched
-routes and unexpected server errors — and to bind explicitly to
-`0.0.0.0`, which Replit's webview needs to reach it reliably. I ran the
-full flow (create project, toggle checklist, upload/download the install
-matrix, report and resolve a hold-up, password login) against the actual
-server code to confirm all of this works end-to-end, not just by reading
-the code.
+## What changed from the Replit version (and why)
 
+Vercel runs code as stateless serverless functions: no persistent disk, and
+its CDN serves everything in `public/` directly (Express never sees those
+requests). So:
 
-A real-time project status portal: project managers check off tasks and
-resolve hold-ups, customers get a live link to watch progress, report
-problems, and download the current install matrix — no login required on
-their end.
+| Before | Now |
+|---|---|
+| JSON files on disk | **Postgres** (Neon, via Vercel Marketplace) |
+| Uploaded files on disk | **Vercel Blob** |
+| Express served the pages & decided login vs dashboard | Pages are plain static files; the login check happens in the browser (`/api/session`) |
+| `/c/<slug>` served by an Express route | `vercel.json` rewrites `/c/<slug>` to `client.html` |
 
-## Why it's built this way
+`server.js` is now API-only (`/api/**`). Tables are created automatically on
+first request — **you never run any SQL by hand.**
 
-I looked at how platforms like Buildertrend and Procore handle this (both
-are standard in construction/install project management) before building
-this. The pattern that shows up everywhere: a simple customer-facing
-portal with live progress, a punch-list/hold-up log, document access, and
-daily-log-style updates — kept deliberately lighter-weight than the
-internal PM tooling, since customers don't need (or want) the full
-complexity.
+## Deploy on Vercel — one-time setup
 
-The checklist itself is pulled directly from your **Project Manager
-Checklist** PDF — Pre-Project Readiness, Daily Crew & Safety, Daily
-Progress, and Quality Control are all in here as checkable items, grouped
-the same way your checklist groups them.
+1. **Import the project** into Vercel (push this folder to GitHub and import
+   the repo, or run `vercel` from the folder). Framework preset: leave
+   auto-detected (Express) / "Other". Don't set a build or output command.
+2. **Add the database:** project → *Storage* → *Create Database* → choose
+   **Neon (Postgres)** from the Marketplace → connect it to this project.
+   Vercel injects `DATABASE_URL` automatically.
+3. **Add file storage:** *Storage* → *Create Database* → **Blob** → connect
+   it to this project. Vercel injects `BLOB_READ_WRITE_TOKEN` automatically.
+4. **Add two environment variables** (*Settings → Environment Variables*):
+   - `DASHBOARD_PASSWORD` — the shared password project managers use
+   - `SESSION_SECRET` — any long random string
+5. **Redeploy** (env vars only apply to new deployments).
 
-## Two views
+Open your Vercel URL: you'll be sent to the password screen, then the PM
+dashboard. A demo project is created on first load — delete it whenever.
 
-**Project managers** (`/`) — sign in with a shared password, see every
-project, check off checklist items in real time, resolve reported
-hold-ups, upload/replace the install matrix, and grab each project's
-customer link.
+## How it behaves
 
-**Customers** (`/c/<project's unique link>`) — no login. They see:
-- Project status and overall progress, updated live
-- The full checklist, same as the PM sees it, read-only
-- A box to report a hold-up (with their name, a summary, and details) —
-  it shows up on the PM's dashboard immediately
-- The current install matrix, with a download button
+- **PMs** (`/`): all projects, checklist, hold-ups, install matrix, and a
+  copy-able customer link per project.
+- **Customers** (`/c/<unique-link>`): read-only live checklist (refreshes
+  every 20 s), hold-up form, matrix download. Anyone with the link can view
+  it, so only send each link to its own customer.
+- Matrix files: `.xlsx`, `.xls`, `.csv`, `.pdf`, **max 4 MB** (Vercel's
+  request-size limit for functions). Uploading a new one replaces the old.
 
-The customer page refreshes itself every 20 seconds, so if a PM checks
-off a task while the customer has the page open, it shows up without
-them needing to reload.
+## Honest limits
 
-## Running it on Replit
+- Matrix files sit in a *public* Blob store behind a long unguessable URL
+  that's only ever shown through the project's private link. If a direct
+  file URL leaked, it would open without the project link.
+- The shared PM password is one password for the whole team (no per-person
+  accounts or audit trail).
+- Hold-ups don't send email/text alerts yet; PMs see them when they load
+  the dashboard.
 
-1. Create a new Repl → **Import from a folder/zip**, and select this
-   project.
-2. Replit runs `npm install && npm start` automatically from `.replit`.
-   If it doesn't, open the Shell and run `npm install && npm start`.
-3. Open the webview URL — that's your PM dashboard.
+## Local development / other hosts
 
-### Lock the PM dashboard with a password
-
-By default anyone with the link can reach the PM dashboard. To add a
-password:
-
-1. In Replit, open **Secrets** and add `DASHBOARD_PASSWORD` with your
-   team's password.
-2. Restart the Repl.
-
-The customer pages (`/c/...`) are never behind this password — they're
-meant to be sent straight to the customer. Each one uses a long random
-link instead of a login, the same way a lot of client portals handle
-this; only share a project's link with that project's customer.
-
-## What ships with it
-
-A demo project ("The Grayson Student Housing") is preloaded so you can
-see it working right away — some checklist items already checked, one
-resolved hold-up, so you can see what it looks like mid-project. Delete
-it from the PM dashboard whenever you're ready to add real ones.
-
-## Adding more projects
-
-From the PM dashboard: fill in the "New project" form at the bottom.
-Every new project automatically gets the full checklist loaded and a
-fresh customer link — nothing else to set up.
-
-## Project structure
+Without `DATABASE_URL` / `BLOB_READ_WRITE_TOKEN` the app falls back to
+in-memory storage (data resets on restart) — fine for trying it out:
 
 ```
-server.js                     Express server: PM auth, project/checklist/issue/matrix API
-data/checklist-template.json  The standard checklist applied to every new project
-data/projects.json            Projects (created automatically on first run)
-data/checklist.json           Checklist items per project
-data/issues.json              Reported hold-ups per project
-data/matrix.json              Install matrix file metadata per project
-uploads/                      Where uploaded install matrix files are stored
-public/
-  index.html, app-pm.js       PM dashboard (project list + create)
-  project.html                PM project detail: checklist, hold-ups, matrix, share link
-  client.html                 Customer-facing project view
-  login.html                  PM password screen
-  styles.css                  Shared styling, matching elevateinstallations.com's
-                               navy/blue palette and your existing logo mark
-  logo.png                    Your logo, pulled from the quote calculator's favicon
+npm install
+npm start      # http://localhost:3000
 ```
 
-## Notes / limits
+Set the same two variables anywhere else (e.g. Replit) and it uses the same
+cloud data; on those hosts the server also serves the pages itself.
 
-- Install matrix accepts `.xlsx`, `.xls`, `.csv`, or `.pdf` — uploading a
-  new one replaces the old one (the old file is removed).
-- Data is stored as plain JSON files, which is fine for this scale. If
-  you outgrow it — many simultaneous projects, needing an edit history,
-  etc. — swapping in a real database is a contained change, mostly
-  limited to the `readJSON`/`writeJSON` helpers in `server.js`.
-- Customer hold-up reports don't currently trigger an email/text to the
-  PM — they show up on the PM dashboard next time it's loaded or
-  refreshed. Wiring up a notification (email, Slack, SMS) would be a
-  good next addition if real-time alerting matters to you.
+## If something looks wrong
+
+- **Pages load but "request could not be found (404)" on data calls:** the
+  function isn't being reached — check Vercel's Framework Preset is
+  Express/Other and that `server.js` is at the project root.
+- **"Something went wrong on the server":** open *Vercel → Logs*. A
+  missing `DATABASE_URL` shows as an in-memory warning; a bad one shows a
+  connection error.
+- **Data disappears between visits:** `DATABASE_URL` isn't set for the
+  environment you're viewing (Production vs Preview) — redeploy after
+  connecting Neon.
+
+## Files
+
+```
+server.js        API routes (Express); exports the app for Vercel
+db.js            Postgres layer (+ in-memory fallback); creates tables itself
+blob.js          Vercel Blob layer (+ in-memory fallback)
+vercel.json      /c/<slug> -> client.html rewrite
+public/          static pages & assets (served by Vercel's CDN)
+```

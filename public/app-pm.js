@@ -20,7 +20,7 @@ async function loadProjects(){
   try {
     projects = await apiFetch('/api/projects');
   } catch (err) {
-    if (err.status === 401) { location.href = '/'; return; }
+    if (err.status === 401) { location.href = '/login.html'; return; }
     grid.innerHTML = `<p class="form-msg error">${escapeHtml(err.message)}</p>`;
     return;
   }

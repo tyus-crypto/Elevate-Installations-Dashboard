@@ -66,12 +66,16 @@
 (async function init(){
   try {
     const session = await apiFetch('/api/session');
+    if (session.authRequired && !session.authed) {
+      location.href = '/login.html';
+      return;
+    }
     if (session.authRequired) {
       const btn = document.getElementById('logout-btn');
       btn.hidden = false;
       btn.addEventListener('click', async () => {
         try { await apiFetch('/api/logout', { method: 'POST' }); } catch {}
-        location.href = '/';
+        location.href = '/login.html';
       });
     }
   } catch (err) {

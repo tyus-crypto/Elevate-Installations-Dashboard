@@ -115,7 +115,7 @@ async function loadProject(){
   try {
     project = await apiFetch('/api/projects/' + projectId);
   } catch (err) {
-    if (err.status === 401) { location.href = '/'; return; }
+    if (err.status === 401) { location.href = '/login.html'; return; }
     document.getElementById('project-name').textContent = 'Could not load this project';
     document.getElementById('project-sub').textContent = err.message;
     return;
