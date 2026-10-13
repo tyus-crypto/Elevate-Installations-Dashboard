@@ -18,6 +18,7 @@ const path = require('path');
 
 const db = require('./db');
 const blob = require('./blob');
+const sms = require('./sms');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +27,19 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'change-me-in-secrets';
 
 // Vercel's request body limit for functions is 4.5 MB, so stay under it.
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+const clip = (value, max) => String(value == null ? '' : value).trim().slice(0, max);
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// Public base URL for links inside text messages. Set APP_URL in Vercel to
+// pin it (e.g. https://portal.elevateinstallations.com); otherwise it's
+// derived from the incoming request.
+function baseUrl(req) {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, '');
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const proto = req.headers['x-forwarded-proto'] || (process.env.VERCEL ? 'https' : 'http');
+  return `${proto}://${host}`;
+}
 
 // Express 4 doesn't catch rejected promises from async handlers on its
 // own — without this, a failed DB call would hang the request instead of
@@ -87,10 +101,19 @@ async function projectSummary(p) {
     openIssueCount: issues.filter(i => i.status === 'open').length,
   };
 }
-async function fullProjectView(p) {
-  const [checklist, issues, matrix] = await Promise.all([db.listChecklist(p.id), db.listIssues(p.id), db.getMatrix(p.id)]);
+async function fullProjectView(p, { includePrivate = false } = {}) {
+  const [checklist, issues, matrix, photos] = await Promise.all([
+    db.listChecklist(p.id), db.listIssues(p.id), db.getMatrix(p.id), db.listPhotos(p.id),
+  ]);
   const done = checklist.filter(i => i.done).length;
+  const privateFields = includePrivate ? {
+    // PM-only: never included in what customers can fetch.
+    pmPhone: p.pmPhone || '',
+    alerts: { configured: sms.isConfigured(), recipientCount: sms.recipientsFor(p).length },
+  } : {};
   return {
+    ...privateFields,
+    photos,
     id: p.id, slug: p.slug, name: p.name, customerName: p.customerName, address: p.address,
     pm: p.pm, foreman: p.foreman, startDate: p.startDate, targetDate: p.targetDate, status: p.status,
     pctComplete: checklist.length ? Math.round((done / checklist.length) * 100) : 0,
@@ -108,11 +131,16 @@ app.get('/api/projects', requirePmAuth, wrap(async (req, res) => {
 }));
 
 app.post('/api/projects', requirePmAuth, wrap(async (req, res) => {
-  const { name, customerName, address, pm, foreman, startDate, targetDate } = req.body || {};
+  const { name, customerName, address, pm, pmPhone, foreman, startDate, targetDate } = req.body || {};
   if (!name || !customerName) return res.status(400).json({ error: 'Project name and customer name are required' });
+  let phone = null;
+  if (pmPhone && String(pmPhone).trim()) {
+    phone = sms.normalizePhone(pmPhone);
+    if (!phone) return res.status(400).json({ error: "That phone number doesn't look right. Use a 10-digit US number like (225) 555-0142." });
+  }
   const project = await db.createProject({
-    name: name.trim(), customerName: customerName.trim(), address: (address || '').trim(),
-    pm: (pm || '').trim(), foreman: (foreman || '').trim(), startDate, targetDate,
+    name: clip(name, 120), customerName: clip(customerName, 120), address: clip(address, 200),
+    pm: clip(pm, 80), pmPhone: phone, foreman: clip(foreman, 80), startDate, targetDate,
   });
   res.status(201).json(await projectSummary(project));
 }));
@@ -120,11 +148,20 @@ app.post('/api/projects', requirePmAuth, wrap(async (req, res) => {
 app.get('/api/projects/:id', requirePmAuth, wrap(async (req, res) => {
   const project = await db.getProjectById(req.params.id);
   if (!project) return res.status(404).json({ error: 'Project not found' });
-  res.json(await fullProjectView(project));
+  res.json(await fullProjectView(project, { includePrivate: true }));
 }));
 
 app.patch('/api/projects/:id', requirePmAuth, wrap(async (req, res) => {
-  const project = await db.updateProject(req.params.id, req.body || {});
+  const fields = { ...(req.body || {}) };
+  if (fields.pmPhone !== undefined) {
+    if (String(fields.pmPhone).trim() === '') fields.pmPhone = '';
+    else {
+      const phone = sms.normalizePhone(fields.pmPhone);
+      if (!phone) return res.status(400).json({ error: "That phone number doesn't look right. Use a 10-digit US number like (225) 555-0142." });
+      fields.pmPhone = phone;
+    }
+  }
+  const project = await db.updateProject(req.params.id, fields);
   if (!project) return res.status(404).json({ error: 'Project not found' });
   res.json(await projectSummary(project));
 }));
@@ -132,7 +169,7 @@ app.patch('/api/projects/:id', requirePmAuth, wrap(async (req, res) => {
 app.delete('/api/projects/:id', requirePmAuth, wrap(async (req, res) => {
   const result = await db.deleteProject(req.params.id);
   if (!result) return res.status(404).json({ error: 'Project not found' });
-  if (result.blobUrl) await blob.deleteFile(result.blobUrl);
+  await Promise.all([result.blobUrl, ...(result.photoUrls || [])].filter(Boolean).map(blob.deleteFile));
   res.json({ ok: true });
 }));
 
@@ -173,9 +210,11 @@ app.post('/api/projects/:id/matrix', requirePmAuth, (req, res) => {
       const project = await db.getProjectById(req.params.id);
       if (!project) return res.status(404).json({ error: 'Project not found' });
 
+      // Every upload gets its own unique file name. Vercel Blob refuses to
+      // overwrite an existing name, and reusing one could also leave the CDN
+      // serving a stale copy — so we upload new, then delete the previous.
       const ext = path.extname(req.file.originalname).toLowerCase();
-      const safeBase = path.basename(req.file.originalname, ext).replace(/[^a-z0-9\-_]+/gi, '-').toLowerCase() || 'matrix';
-      const key = `matrix-${project.id}-${safeBase}${ext}`;
+      const key = `matrix-${project.id}-${crypto.randomBytes(6).toString('hex')}${ext}`;
 
       const { url } = await blob.putFile(key, req.file.buffer, { contentType: blob.CONTENT_TYPES[ext] });
       const uploadedBy = (req.body && req.body.uploadedBy) || project.pm || 'Project Manager';
@@ -190,6 +229,63 @@ app.post('/api/projects/:id/matrix', requirePmAuth, (req, res) => {
   });
 });
 
+// daily photo updates (PM only). The browser shrinks each photo before
+// uploading (see public/image-tools.js) so it fits Vercel's 4.5 MB limit.
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: (req, file, cb) => {
+    const ok = IMAGE_TYPES.includes(file.mimetype);
+    cb(ok ? null : new Error('Photos must be JPG, PNG, or WebP images'), ok);
+  },
+});
+
+app.post('/api/projects/:id/photos', requirePmAuth, (req, res) => {
+  photoUpload.single('file')(req, res, async (err) => {
+    try {
+      if (err) {
+        const message = err.code === 'LIMIT_FILE_SIZE'
+          ? `That photo is too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).` : err.message;
+        return res.status(400).json({ error: message });
+      }
+      if (!req.file) return res.status(400).json({ error: 'No photo received' });
+      const project = await db.getProjectById(req.params.id);
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+
+      const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[req.file.mimetype];
+      const key = `photo-${project.id}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+      const { url } = await blob.putFile(key, req.file.buffer, { contentType: req.file.mimetype });
+      const photo = await db.createPhoto(project.id, {
+        url, caption: clip(req.body && req.body.caption, 500), takenBy: clip((req.body && req.body.takenBy) || project.pm, 80),
+      });
+      res.status(201).json(photo);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Could not save the photo. Please try again.' });
+    }
+  });
+});
+
+app.delete('/api/projects/:id/photos/:photoId', requirePmAuth, wrap(async (req, res) => {
+  const photo = await db.deletePhoto(req.params.id, req.params.photoId);
+  if (!photo) return res.status(404).json({ error: 'Photo not found' });
+  await blob.deleteFile(photo.url);
+  res.json({ ok: true });
+}));
+
+// Lets a PM confirm text alerts really reach their phone, without waiting
+// for a customer to report something.
+app.post('/api/projects/:id/test-alert', requirePmAuth, wrap(async (req, res) => {
+  const project = await db.getProjectById(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  if (!sms.isConfigured()) return res.status(400).json({ error: 'Text alerts are not set up yet. Add the Twilio settings in Vercel (see README).' });
+  const recipients = sms.recipientsFor(project);
+  if (!recipients.length) return res.status(400).json({ error: 'Add a PM mobile number to this project first.' });
+  const result = await sms.sendAlert(recipients, `Elevate test: text alerts for "${project.name}" are working.`);
+  if (!result.sent) return res.status(502).json({ error: 'Twilio did not accept the message. Check Vercel logs, and that your sending number is registered/verified.' });
+  res.json({ ok: true, count: result.count });
+}));
+
 // =======================================================================
 // Public (customer) API — scoped by unguessable project slug, no login
 // =======================================================================
@@ -203,11 +299,26 @@ app.post('/api/public/:slug/issues', wrap(async (req, res) => {
   const project = await db.getProjectBySlug(req.params.slug);
   if (!project) return res.status(404).json({ error: 'Project not found' });
   const { title, description, reportedBy } = req.body || {};
-  if (!title || !description) return res.status(400).json({ error: 'Please include both a title and a description' });
+  if (!clip(title, 1) || !clip(description, 1)) return res.status(400).json({ error: 'Please include both a title and a description' });
   const issue = await db.createIssue(project.id, {
-    title: title.trim(), description: description.trim(), reportedBy: (reportedBy || 'Customer').trim(),
+    title: clip(title, 120), description: clip(description, 2000), reportedBy: clip(reportedBy, 80) || 'Customer',
   });
-  res.status(201).json(issue);
+
+  // Text the PM. This page is public (anyone with the link), so cap how many
+  // texts one project can trigger: the report is always saved, but after 5
+  // in 10 minutes we stop texting to avoid a flood.
+  let notified = false;
+  try {
+    const recent = await db.countRecentIssues(project.id, 10);
+    if (recent <= 5) {
+      const text = `Elevate: new hold-up on "${project.name}" from ${issue.reportedBy}: ${issue.title}. ${baseUrl(req)}/project.html?id=${project.id}`.replace(/\s+/g, ' ');
+      const result = await sms.sendAlert(sms.recipientsFor(project), text.slice(0, 320));
+      notified = result.sent;
+    }
+  } catch (e) {
+    console.error('[alert] could not send text alert:', e.message);
+  }
+  res.status(201).json({ ...issue, notified });
 }));
 
 app.get('/api/public/:slug/matrix', wrap(async (req, res) => {
@@ -215,7 +326,16 @@ app.get('/api/public/:slug/matrix', wrap(async (req, res) => {
   if (!project) return res.status(404).json({ error: 'Project not found' });
   const matrix = await db.getMatrix(project.id);
   if (!matrix) return res.status(404).json({ error: 'No install matrix uploaded yet' });
-  res.redirect(302, matrix.blobUrl);
+  // Stream through the server (files are small) so the customer gets the
+  // original file name, and the storage URL is never handed out.
+  const file = await blob.readFile(matrix.blobUrl);
+  if (!file) return res.status(404).json({ error: 'The install matrix file could not be found. Ask your project manager to upload it again.' });
+  const ext = path.extname(matrix.originalName).toLowerCase();
+  const safeName = matrix.originalName.replace(/["\\\r\n]/g, '_');
+  res.setHeader('Content-Type', blob.CONTENT_TYPES[ext] || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(matrix.originalName)}`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(file.buffer);
 }));
 
 // Any /api/* request that didn't match a route above — answer in JSON so the

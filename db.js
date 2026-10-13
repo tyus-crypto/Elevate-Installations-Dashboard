@@ -56,7 +56,7 @@ const CHECKLIST_TEMPLATE = [
 function projectRowToCamel(r) {
   return {
     id: r.id, slug: r.slug, name: r.name, customerName: r.customer_name ?? r.customerName,
-    address: r.address, pm: r.pm, foreman: r.foreman,
+    address: r.address, pm: r.pm, pmPhone: r.pm_phone ?? r.pmPhone ?? null, foreman: r.foreman,
     startDate: r.start_date ?? r.startDate, targetDate: r.target_date ?? r.targetDate,
     status: r.status, createdAt: r.created_at ?? r.createdAt,
   };
@@ -74,6 +74,12 @@ function issueRowToCamel(r) {
     reportedBy: r.reported_by ?? r.reportedBy, reportedAt: r.reported_at ?? r.reportedAt,
     status: r.status, resolutionNote: r.resolution_note ?? r.resolutionNote,
     resolvedAt: r.resolved_at ?? r.resolvedAt,
+  };
+}
+function photoRowToCamel(r) {
+  return {
+    id: r.id, projectId: r.project_id ?? r.projectId, url: r.url, caption: r.caption || '',
+    takenBy: r.taken_by ?? r.takenBy ?? '', createdAt: r.created_at ?? r.createdAt,
   };
 }
 function matrixRowToCamel(r) {
@@ -96,6 +102,8 @@ const pg = {
       start_date TEXT, target_date TEXT, status TEXT NOT NULL DEFAULT 'Pre-Project',
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`;
+    // Upgrade-safe: databases created by an earlier version get the new column.
+    await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS pm_phone TEXT`;
     await sql`CREATE TABLE IF NOT EXISTS checklist_items (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       category TEXT NOT NULL, item_text TEXT NOT NULL, done BOOLEAN NOT NULL DEFAULT false,
@@ -106,6 +114,11 @@ const pg = {
       title TEXT NOT NULL, description TEXT NOT NULL, reported_by TEXT,
       reported_at TIMESTAMPTZ NOT NULL DEFAULT now(), status TEXT NOT NULL DEFAULT 'open',
       resolution_note TEXT, resolved_at TIMESTAMPTZ
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS photos (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      url TEXT NOT NULL, caption TEXT, taken_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`;
     await sql`CREATE TABLE IF NOT EXISTS matrices (
       project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
@@ -152,11 +165,11 @@ const pg = {
     const rows = await sql`SELECT * FROM projects WHERE slug = ${slug}`;
     return rows[0] ? projectRowToCamel(rows[0]) : null;
   },
-  async createProject({ name, customerName, address, pm, foreman, startDate, targetDate }) {
+  async createProject({ name, customerName, address, pm, pmPhone, foreman, startDate, targetDate }) {
     const id = newId('proj');
     const slug = newSlug();
-    const rows = await sql`INSERT INTO projects (id, slug, name, customer_name, address, pm, foreman, start_date, target_date, status)
-      VALUES (${id}, ${slug}, ${name}, ${customerName}, ${address || null}, ${pm || null}, ${foreman || null}, ${startDate || null}, ${targetDate || null}, 'Pre-Project')
+    const rows = await sql`INSERT INTO projects (id, slug, name, customer_name, address, pm, pm_phone, foreman, start_date, target_date, status)
+      VALUES (${id}, ${slug}, ${name}, ${customerName}, ${address || null}, ${pm || null}, ${pmPhone || null}, ${foreman || null}, ${startDate || null}, ${targetDate || null}, 'Pre-Project')
       RETURNING *`;
     const project = projectRowToCamel(rows[0]);
     for (let i = 0; i < CHECKLIST_TEMPLATE.length; i++) {
@@ -167,12 +180,13 @@ const pg = {
     return project;
   },
   async updateProject(id, fields) {
-    const { name, customerName, address, pm, foreman, startDate, targetDate, status } = fields;
+    const { name, customerName, address, pm, pmPhone, foreman, startDate, targetDate, status } = fields;
     const rows = await sql`UPDATE projects SET
         name = COALESCE(${name ?? null}, name),
         customer_name = COALESCE(${customerName ?? null}, customer_name),
         address = COALESCE(${address ?? null}, address),
         pm = COALESCE(${pm ?? null}, pm),
+        pm_phone = CASE WHEN ${pmPhone ?? null}::text IS NULL THEN pm_phone ELSE NULLIF(${pmPhone ?? null}::text, '') END,
         foreman = COALESCE(${foreman ?? null}, foreman),
         start_date = COALESCE(${startDate ?? null}, start_date),
         target_date = COALESCE(${targetDate ?? null}, target_date),
@@ -182,9 +196,10 @@ const pg = {
   },
   async deleteProject(id) {
     const matrixRows = await sql`SELECT blob_url FROM matrices WHERE project_id = ${id}`;
+    const photoRows = await sql`SELECT url FROM photos WHERE project_id = ${id}`;
     const rows = await sql`DELETE FROM projects WHERE id = ${id} RETURNING *`;
     if (!rows[0]) return null;
-    return { deleted: projectRowToCamel(rows[0]), blobUrl: matrixRows[0]?.blob_url || null };
+    return { deleted: projectRowToCamel(rows[0]), blobUrl: matrixRows[0]?.blob_url || null, photoUrls: photoRows.map(r => r.url) };
   },
 
   async listChecklist(projectId) {
@@ -220,6 +235,26 @@ const pg = {
     return rows[0] ? issueRowToCamel(rows[0]) : null;
   },
 
+  async countRecentIssues(projectId, minutes) {
+    const since = new Date(Date.now() - minutes * 60000).toISOString();
+    const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM issues WHERE project_id = ${projectId} AND reported_at > ${since}`;
+    return count;
+  },
+
+  async listPhotos(projectId) {
+    const rows = await sql`SELECT * FROM photos WHERE project_id = ${projectId} ORDER BY created_at DESC LIMIT 200`;
+    return rows.map(photoRowToCamel);
+  },
+  async createPhoto(projectId, { url, caption, takenBy }) {
+    const rows = await sql`INSERT INTO photos (id, project_id, url, caption, taken_by)
+      VALUES (${newId('photo')}, ${projectId}, ${url}, ${caption || null}, ${takenBy || null}) RETURNING *`;
+    return photoRowToCamel(rows[0]);
+  },
+  async deletePhoto(projectId, photoId) {
+    const rows = await sql`DELETE FROM photos WHERE id = ${photoId} AND project_id = ${projectId} RETURNING *`;
+    return rows[0] ? photoRowToCamel(rows[0]) : null;
+  },
+
   async getMatrix(projectId) {
     const rows = await sql`SELECT * FROM matrices WHERE project_id = ${projectId}`;
     return matrixRowToCamel(rows[0]);
@@ -243,6 +278,7 @@ const mem = {
   checklist: new Map(), // id -> item
   issues: new Map(),    // id -> issue
   matrices: new Map(),  // projectId -> matrix
+  photos: new Map(),    // id -> photo
 };
 
 const memImpl = {
@@ -277,10 +313,10 @@ const memImpl = {
   },
   async getProjectById(id) { return mem.projects.get(id) || null; },
   async getProjectBySlug(slug) { return [...mem.projects.values()].find(p => p.slug === slug) || null; },
-  async createProject({ name, customerName, address, pm, foreman, startDate, targetDate }) {
+  async createProject({ name, customerName, address, pm, pmPhone, foreman, startDate, targetDate }) {
     const id = newId('proj');
     const project = {
-      id, slug: newSlug(), name, customerName, address: address || '', pm: pm || '', foreman: foreman || '',
+      id, slug: newSlug(), name, customerName, address: address || '', pm: pm || '', pmPhone: pmPhone || null, foreman: foreman || '',
       startDate: startDate || '', targetDate: targetDate || '', status: 'Pre-Project', createdAt: new Date().toISOString(),
     };
     mem.projects.set(id, project);
@@ -293,7 +329,7 @@ const memImpl = {
   async updateProject(id, fields) {
     const project = mem.projects.get(id);
     if (!project) return null;
-    ['name', 'customerName', 'address', 'pm', 'foreman', 'startDate', 'targetDate', 'status'].forEach(key => {
+    ['name', 'customerName', 'address', 'pm', 'pmPhone', 'foreman', 'startDate', 'targetDate', 'status'].forEach(key => {
       if (fields[key] !== undefined && fields[key] !== null) project[key] = fields[key];
     });
     return project;
@@ -306,7 +342,9 @@ const memImpl = {
     [...mem.issues.values()].filter(i => i.projectId === id).forEach(i => mem.issues.delete(i.id));
     const matrix = mem.matrices.get(id);
     mem.matrices.delete(id);
-    return { deleted: project, blobUrl: matrix?.blobUrl || null };
+    const photoUrls = [...mem.photos.values()].filter(ph => ph.projectId === id).map(ph => ph.url);
+    [...mem.photos.values()].filter(ph => ph.projectId === id).forEach(ph => mem.photos.delete(ph.id));
+    return { deleted: project, blobUrl: matrix?.blobUrl || null, photoUrls };
   },
 
   async listChecklist(projectId) {
@@ -337,6 +375,28 @@ const memImpl = {
     if (issue.status === 'resolved' && !issue.resolvedAt) issue.resolvedAt = new Date().toISOString();
     if (issue.status === 'open') issue.resolvedAt = null;
     return issue;
+  },
+
+  async countRecentIssues(projectId, minutes) {
+    const since = Date.now() - minutes * 60000;
+    return [...mem.issues.values()].filter(i => i.projectId === projectId && new Date(i.reportedAt).getTime() > since).length;
+  },
+
+  async listPhotos(projectId) {
+    return [...mem.photos.values()].filter(p => p.projectId === projectId)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 200);
+  },
+  async createPhoto(projectId, { url, caption, takenBy }) {
+    const id = newId('photo');
+    const photo = { id, projectId, url, caption: caption || '', takenBy: takenBy || '', createdAt: new Date().toISOString() };
+    mem.photos.set(id, photo);
+    return photo;
+  },
+  async deletePhoto(projectId, photoId) {
+    const photo = mem.photos.get(photoId);
+    if (!photo || photo.projectId !== projectId) return null;
+    mem.photos.delete(photoId);
+    return photo;
   },
 
   async getMatrix(projectId) { return mem.matrices.get(projectId) || null; },

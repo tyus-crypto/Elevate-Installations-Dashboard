@@ -20,6 +20,10 @@ const CONTENT_TYPES = {
   '.pdf': 'application/pdf',
   '.xls': 'application/vnd.ms-excel',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
 };
 
 async function putFile(key, buffer, { contentType } = {}) {
@@ -42,6 +46,18 @@ async function deleteFile(urlOrKey) {
   catch (e) { console.error('[blob] Could not delete old file:', e.message); }
 }
 
+// Fetch a stored file's bytes (used to serve downloads with a proper filename).
+async function readFile(urlOrKey) {
+  if (usingMemory) {
+    const m = String(urlOrKey).match(/^\/_devblob\/(.+)$/);
+    const entry = m && memStore.get(decodeURIComponent(m[1]));
+    return entry ? { buffer: entry.buffer, contentType: entry.contentType } : null;
+  }
+  const r = await fetch(urlOrKey, { signal: AbortSignal.timeout(8000) });
+  if (!r.ok) return null;
+  return { buffer: Buffer.from(await r.arrayBuffer()), contentType: r.headers.get('content-type') };
+}
+
 // Express route handler for GET /_devblob/:key — only registered when
 // usingMemory is true (see server.js).
 function devServeHandler(req, res) {
@@ -49,8 +65,9 @@ function devServeHandler(req, res) {
   const entry = memStore.get(key);
   if (!entry) return res.status(404).json({ error: 'File not found (in-memory dev store resets on restart)' });
   res.setHeader('Content-Type', entry.contentType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${entry.originalName}"`);
+  const isImage = String(entry.contentType || '').startsWith('image/');
+  res.setHeader('Content-Disposition', `${isImage ? 'inline' : 'attachment'}; filename="${entry.originalName}"`);
   res.end(entry.buffer);
 }
 
-module.exports = { usingMemory, putFile, deleteFile, devServeHandler, CONTENT_TYPES };
+module.exports = { usingMemory, putFile, deleteFile, readFile, devServeHandler, CONTENT_TYPES };
